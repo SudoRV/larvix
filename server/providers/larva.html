@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>AI Structured Branching Demo</title>
+
+    <style>
+        body {
+            font-family: "Segoe UI", sans-serif;
+            background: #f3f4f6;
+            padding: 8px;
+        }
+
+        #container {
+            background: white;
+            padding: 8px;
+            border-radius: 8px;
+            max-width: 460px;
+        }
+
+        .block {
+            position: relative;
+            margin: 6px 0;
+            padding: 6px 10px;
+            border-radius: 6px;
+            transition: all 0.15s ease;
+        }
+
+        .block[data-depth="0"] {
+            margin-left: 0px;
+        }
+
+        .block[data-depth="1"] {
+            margin-left: 18px;
+        }
+
+        .block[data-depth="2"] {
+            margin-left: 36px;
+        }
+
+        .block:hover:not(.no-hover) {
+            background: #eef6ff;
+            border: 1px solid #4da3ff;
+        }
+
+        .block.branched {
+            background: #d6ecff;
+        }
+
+        .block-content {
+            margin: 2px 0;
+            line-height: 1.4;
+        }
+
+        .branch-btn {
+            position: absolute;
+            right: -10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4da3ff;
+            color: white;
+            font-size: 13px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+
+        .block:hover .branch-btn {
+            opacity: 1;
+        }
+
+        branch {
+            background: #bfe3ff;
+            padding: 1px 4px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        h3 {
+            margin: 4px 0;
+        }
+
+        p {
+            margin: 4px 0;
+        }
+
+        li {
+            margin: 2px 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2 style="margin-bottom:10px;">AI Structured Branching Demo</h2>
+    <div id="container"></div>
+    <button onclick="showJSON()" style="margin-top:20px;">Show JSON in Console</button>
+
+    <script>
+
+        // ----------------------------
+        // Sample AI Response
+        // ----------------------------
+        const sampleResponse = `
+# Neural Networks
+
+Neural networks are computational models inspired by the structure and function of the human brain.
+
+Backpropagation is the updation process of weights using gradient descent.
+
+Neural networks are widely used in computer vision and NLP.
+
+- Learns hierarchical patterns from raw data
+- Adjusts weights iteratively
+- Generalizes to unseen data
+`;
+
+        function parseMarkdown(text) {
+            const lines = text.trim().split("\n");
+            const nodes = [];
+            let currentTopicId = null;
+
+            lines.forEach(line => {
+
+                if (line.startsWith("# ")) {
+                    const id = generateBranchId();
+                    currentTopicId = id;
+
+                    nodes.push({
+                        id,
+                        type: "topic",
+                        text: line.replace("# ", "").trim(),
+                        depth: 0,
+                        parent_id: null,
+                        branch_id: null
+                    });
+                }
+
+                else if (line.startsWith("- ")) {
+                    nodes.push({
+                        id: generateBranchId(),
+                        type: "point",
+                        text: line.replace("- ", "").trim(),
+                        depth: 2,
+                        parent_id: currentTopicId,
+                        branch_id: null
+                    });
+                }
+
+                else if (line.trim() !== "") {
+                    nodes.push({
+                        id: generateBranchId(),
+                        type: "paragraph",
+                        text: line.trim(),
+                        depth: 1,
+                        parent_id: currentTopicId,
+                        branch_id: null
+                    });
+                }
+
+            });
+
+            return { nodes };
+        }
+
+        let aiJson = parseMarkdown(sampleResponse);
+
+        // ----------------------------
+        // Render
+        // ----------------------------
+        function render() {
+            const container = document.getElementById("container");
+            container.innerHTML = "";
+
+            aiJson.nodes.forEach((node, index) => {
+                container.appendChild(createBlock(node, index));
+            });
+        }
+
+        function createBlock(node, index) {
+
+            const div = document.createElement("div");
+            div.className = "block";
+            div.dataset.depth = node.depth;
+            div.setAttribute("branch_id", node.branch_id)
+
+            if (node.branch_id) {
+                div.classList.add("branched");
+            }
+
+            const tag =
+                node.type === "topic" ? "h3" :
+                    node.type === "point" ? "li" : "p";
+
+            const el = document.createElement(tag);
+            el.className = "block-content";
+            el.innerHTML = node.text;
+
+            const btn = document.createElement("div");
+            btn.className = "branch-btn";
+
+            // If branched → show "-"
+            btn.innerText = node.branch_id ? "-" : "+";
+
+            btn.onclick = function (e) {
+                e.stopPropagation();
+
+                if (node.branch_id) {
+                    // Debranch whole block
+                    node.branch_id = null;
+                } else {
+                    // Branch whole block
+                    node.branch_id = generateBranchId();
+                }
+
+                render();
+            };
+
+            div.appendChild(el);
+            div.appendChild(btn);
+
+            return div;
+        }
+
+        // ----------------------------
+        // Selection Logic
+        // ----------------------------
+        let floatingBtn = null;
+
+        document.addEventListener("selectionchange", handleSelection);
+
+        function handleSelection() {
+            removeFloatingButton();
+            removeHoverAndBlockButtons();
+
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) return;
+
+            const text = selection.toString().trim();
+            if (!text) {
+                restoreHover();
+                return;
+            }
+
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+
+            createFloatingButton(rect, range, text);
+        }
+
+        function createFloatingButton(rect, range, text) {
+
+            const alreadyBranched = range.startContainer.parentElement.tagName === "BRANCH";
+
+            const btn = document.createElement("div");
+            btn.innerText = alreadyBranched ? "-" : "+";
+            btn.style.position = "absolute";
+            btn.style.left = rect.right + 4 + window.scrollX + "px";
+            btn.style.top = rect.top + (rect.bottom - rect.top) / 2 - 10 + window.scrollY + "px";
+            btn.style.width = "20px";
+            btn.style.height = "20px";
+            btn.style.borderRadius = "50%";
+            btn.style.background = "#4da3ff";
+            btn.style.color = "white";
+            btn.style.display = "flex";
+            btn.style.justifyContent = "center";
+            btn.style.alignItems = "center";
+            btn.style.cursor = "pointer";
+            btn.style.zIndex = "999";
+
+            document.body.appendChild(btn);
+            floatingBtn = btn;
+
+            btn.onclick = function () {
+
+                const parentBlock = range.startContainer.parentElement.closest(".block");
+                const blockIndex = [...document.querySelectorAll(".block")].indexOf(parentBlock);
+                const node = aiJson.nodes[blockIndex];
+
+                const existingBranch = range.startContainer.parentElement.closest("branch");
+
+                if (existingBranch) {
+                    // Debranch selected text
+                    const parent = existingBranch.parentNode;
+                    parent.replaceChild(
+                        document.createTextNode(existingBranch.textContent),
+                        existingBranch
+                    );
+                    syncDomToJson();
+                    render();
+                } else {
+                    // Branch selected text
+                    const id = generateBranchId();
+                    const branchNode = document.createElement("branch");
+                    branchNode.setAttribute("branch_id", id);
+                    branchNode.textContent = text;
+
+                    range.deleteContents();
+                    range.insertNode(branchNode);
+
+                    syncDomToJson();
+                    render();
+                }
+
+                window.getSelection().removeAllRanges();
+                removeFloatingButton();
+                restoreHover();
+            };
+        }
+
+        function removeFloatingButton() {
+            if (floatingBtn) {
+                floatingBtn.remove();
+                floatingBtn = null;
+            }
+        }
+
+        function removeHoverAndBlockButtons() {
+            document.querySelectorAll(".block").forEach(b => {
+                b.classList.add("no-hover");
+            });
+
+            document.querySelectorAll(".branch-btn").forEach(b => {
+                b.style.display = "none";
+            });
+        }
+
+        function restoreHover() {
+            document.querySelectorAll(".block").forEach(b => {
+                b.classList.remove("no-hover");
+            });
+
+            document.querySelectorAll(".branch-btn").forEach(b => {
+                b.style.display = "";
+            });
+        }
+
+        // ----------------------------
+        function syncDomToJson() {
+            const blocks = document.querySelectorAll(".block-content");
+            blocks.forEach((el, index) => {
+                aiJson.nodes[index].text = el.innerHTML;
+            });
+        }
+
+        function generateBranchId() {
+            return Math.floor(Math.random() * 1000000)
+                .toString()
+                .padStart(6, "0");
+        }
+
+        function showJSON() {
+            console.log(JSON.stringify(aiJson, null, 2));
+        }
+
+        render();
+
+    </script>
+</body>
+
+</html>

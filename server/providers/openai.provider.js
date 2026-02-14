@@ -3,62 +3,76 @@ export const callOpenAI = async (message) => {
 
   if (normalized.includes("backpropagation")) {
     return `
-## Backpropagation
+## Backpropagation (Backprop)
 
-Backpropagation is a supervised learning algorithm used to train artificial neural networks. It updates the weights of the network by minimizing the loss function using gradient descent and the chain rule of calculus.
+Backpropagation is a supervised learning algorithm used to train artificial neural networks. It minimizes the loss function by adjusting network weights using **gradient descent** and the **chain rule of calculus**.
 
 ---
 
-### 🔹 Forward Pass
+### 🔹 Step 1: Forward Pass
 
-For a neuron:
+Each neuron computes:
 
-z = w·x + b  
+\`\`\`
+z = w·x + b
 a = f(z)
+\`\`\`
 
 Where:
-- w = weights  
-- x = input  
-- b = bias  
-- f(z) = activation function  
-- a = output  
+- **w** = weights  
+- **x** = input  
+- **b** = bias  
+- **f(z)** = activation function  
+- **a** = output  
 
 ---
 
-### 🔹 Loss Function
+### 🔹 Step 2: Loss Function
 
 For Mean Squared Error (MSE):
 
+\`\`\`
 L = (1/2)(y - ŷ)^2
+\`\`\`
 
 Where:
-- y = actual value  
-- ŷ = predicted value  
+- **y** = actual value  
+- **ŷ** = predicted value  
 
 ---
 
-### 🔹 Backward Pass
+### 🔹 Step 3: Backward Pass
 
 Using the chain rule:
 
+\`\`\`
 ∂L/∂w = (∂L/∂a)(∂a/∂z)(∂z/∂w)
+\`\`\`
 
 For sigmoid activation:
 
+\`\`\`
 σ'(z) = σ(z)(1 - σ(z))
+\`\`\`
 
 Error term:
 
+\`\`\`
 δ = (ŷ - y) × σ'(z)
+\`\`\`
 
 ---
 
-### 🔹 Weight Update Rule
+### 🔹 Step 4: Weight Update
 
+Weights are updated using gradient descent:
+
+\`\`\`
 w_new = w_old - η(∂L/∂w)
+\`\`\`
 
 Where:
-- η = learning rate  
+- **η** = learning rate  
 
 ---
 
@@ -66,18 +80,24 @@ Where:
 
 Backpropagation:
 - Computes prediction error  
-- Propagates error backward layer-by-layer  
+- Propagates error backward through layers  
 - Updates weights iteratively  
-- Minimizes loss efficiently  
+- Reduces loss efficiently  
 
-It is the core optimization mechanism behind deep learning.
+It is the fundamental optimization algorithm behind deep learning.
 `;
   }
 
-  return "Sorry, this demo only supports the question about backpropagation.";
+  return `
+## Demo Mode
+
+This demo currently supports only:
+
+- **What is backpropagation?**
+
+Try asking that question.
+`;
 };
-
-
 
 
 

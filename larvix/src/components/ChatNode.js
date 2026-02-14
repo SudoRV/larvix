@@ -161,9 +161,9 @@ const ChatNode = ({ id, data, selected }) => {
                 }`}
             >
               <div
-                className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm shadow-sm ${msg.role === "user"
-                  ? "bg-black text-white rounded-br-sm"
-                  : "bg-gray-100 text-gray-800 rounded-bl-sm"
+                className={`max-w-[100%] px-3 py-2 rounded-lg text-sm ${msg.role === "user"
+                  ? "bg-neutral-800 text-white"
+                  : " text-gray-800"
                   }`}
               >
                 <ReactMarkdown>{msg.content}</ReactMarkdown>
