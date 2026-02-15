@@ -90,7 +90,6 @@ It is the fundamental optimization algorithm behind deep learning.
 `;
 
     const ast_response = parseMarkdownToAST(markdown_response);
-    console.log(ast_response);
     return ast_response;
   }
 
@@ -105,7 +104,6 @@ Try asking that question.
 `;
 
   const ast_response = parseMarkdownToAST(markdown_response);
-  console.log(ast_response);
   return ast_response;
 
 }

@@ -1,13 +1,16 @@
-import { Handle, Position } from "reactflow";
+import { Handle, Position, useUpdateNodeInternals, useReactFlow } from "reactflow";
 import { useState, useRef, useEffect } from "react";
-import ReactMarkdown from "react-markdown";
 import {
   FiMic,
   FiX,
   FiGitBranch,
   FiChevronUp,
-  FiChevronDown
+  FiChevronDown,
+  FiPlus
 } from "react-icons/fi";
+import { useStates } from "../context/GlobalContext";
+
+import { astToHtml } from "./AstToHTML";
 
 export const SendButton = ({ onClick, disabled }) => (
   <button
@@ -25,12 +28,22 @@ const ChatNode = ({ id, data, selected }) => {
   const [selectedApi, setSelectedApi] = useState("chatgpt");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
-
   const bottomRef = useRef(null);
+  const chatRef = useRef(null);
+  const nodeRef = useRef(null);
+  const branchButtonRef = useRef(null);
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  const { toolState } = useStates();
+  const { getViewport } = useReactFlow();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [messages]);
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
@@ -51,11 +64,14 @@ const ChatNode = ({ id, data, selected }) => {
       });
 
       const result = await res.json();
+      const html = await astToHtml(result.output);
+
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: result.output || "No response" }
+        { role: "assistant", content: html || "No response" }
       ]);
-    } catch {
+    } catch (err) {
+      console.log(err)
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: "⚠ Server error." }
@@ -65,21 +81,74 @@ const ChatNode = ({ id, data, selected }) => {
     setLoading(false);
   };
 
+  //element level branching
+  useEffect(() => {
+    let prevEl = null;
+
+    const handleMove = (e) => {
+      if (!toolState.branch) return;
+
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+
+      // Remove style from previous element
+      if (prevEl && prevEl !== el) {
+        prevEl.classList.remove("bg-blue-100", "text-black");
+      }
+
+      // Add style to new element
+      if (el && !el.classList.contains("not-branchable")) {
+        el.classList.add("bg-blue-100", "text-black");
+
+        // show branch button
+        const el_rect = el.getBoundingClientRect();
+        const node_rect = nodeRef.current.getBoundingClientRect();
+        const viewport = getViewport();
+
+        const x =
+          (el_rect.left - node_rect.left + el_rect.width) / viewport.zoom + 10;
+
+        const y =
+          (el_rect.top - node_rect.top) / viewport.zoom + el_rect.height / 2;
+
+        if (!e.ctrlKey) {
+          branchButtonRef.current.style.top = `${y}px`;
+          branchButtonRef.current.style.left = `${x}px`;
+        }
+
+        branchButtonRef.current.classList.add("opacity-100");
+
+        prevEl = el;
+      } else {
+        prevEl = null;
+      }
+    };
+
+    const node = chatRef.current;
+    node?.addEventListener("mousemove", handleMove);
+
+    return () => {
+      node?.removeEventListener("mousemove", handleMove);
+    };
+  }, [toolState]);
+
   const isVisible = selected;
 
   return (
-    <div className={`group bg-white shadow-xl rounded-xl w-[400px] border border-gray-200 overflow-hidden flex flex-col justify-between
+    <div className={`group bg-gray-50 shadow-xl rounded-xl w-[400px] border border-gray-200 overflow-hidden flex flex-col justify-between
     ${collapsed ? "min-h-0" : "min-h-[80px]"
-      }`}>
+      }`}
+
+      ref={nodeRef}
+    >
 
       <Handle type="target" position={Position.Top} />
 
       {/* HEADER */}
       <div
         className={`
-          w-full bg-gray-50 px-3 py-2
+          w-full bg-gray-100 px-3 py-2
           flex items-center justify-between
-          transition-all duration-200 z-10 cursor-grab active:cursor-grabbing
+          transition-all duration-200 z-10 cursor-grab active:cursor-grabbing shadow-md
           ${!collapsed && (
             isVisible
               ? "py-2 opacity-100"
@@ -117,23 +186,30 @@ const ChatNode = ({ id, data, selected }) => {
       {/* CHAT */}
       {!collapsed && (
         <div
-          className={`flex-1 p-3 space-y-3 transition-all duration-200 cursor-default ${
-            isVisible && "nodrag"
-          }`}
+          className={`flex-1 p-3 space-y-3 transition-all duration-200 cursor-default max-h-screen overflow-y-auto custom-scroll not-branchable ${isVisible && "nodrag"
+            }`}
+
+          onWheel={(e) => {
+            e.stopPropagation();
+            const el = e.currentTarget;
+            el.scrollTop += e.deltaY;
+          }}
+
+          ref={chatRef}
         >
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 text-gray-500">
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 text-gray-500 not-branchable">
 
-              <p className="text-sm font-medium text-gray-600">
+              <p className="text-sm font-medium text-gray-600 not-branchable">
                 Start a conversation
               </p>
 
-              <div className="flex flex-wrap justify-center gap-2">
+              <div className="flex flex-wrap justify-center gap-2 not-branchable">
                 {[
                   "Ask anything",
                   "Summarize topic",
                   "Generate ideas",
-                  "Explain concept",
+                  "backpropagation",
                   "Branch chat"
                 ].map((item) => (
                   <button
@@ -143,7 +219,7 @@ const ChatNode = ({ id, data, selected }) => {
             px-4 py-2 text-xs rounded-full
             bg-white border border-gray-300
             hover:bg-black hover:text-white
-            transition
+            transition not-branchable
           "
                   >
                     {item}
@@ -157,16 +233,17 @@ const ChatNode = ({ id, data, selected }) => {
           {messages.map((msg, index) => (
             <div
               key={index}
-              className={`flex select-text ${msg.role === "user" ? "justify-end" : "justify-start"
+              className={`flex select-text not-branchable ${msg.role === "user" ? "justify-end" : "justify-start"
                 }`}
             >
               <div
-                className={`max-w-[100%] px-3 py-2 rounded-lg text-sm ${msg.role === "user"
+                className={`px-3 py-2 rounded-lg text-sm prose prose-sm max-w-none not-branchable ${msg.role === "user"
                   ? "bg-neutral-800 text-white"
                   : " text-gray-800"
                   }`}
+
+                dangerouslySetInnerHTML={{ __html: msg.content }}
               >
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
               </div>
             </div>
           ))}
@@ -233,6 +310,34 @@ const ChatNode = ({ id, data, selected }) => {
         </div>
 
       </div>
+
+      {/* branch element button */}
+      {toolState.branch && (
+        <button
+          ref={branchButtonRef}
+          className="
+            absolute
+            -right-3
+            top-1/2
+            -translate-y-1/2
+            w-6
+            h-6
+            rounded-full
+            bg-blue-500
+            hover:bg-blue-600
+            text-white
+            flex
+            items-center
+            justify-center
+            shadow-lg
+            transition-all
+            duration-100
+          "
+        >
+          <FiPlus size={18} />
+        </button>
+      )}
+
       <Handle type="source" position={Position.Bottom} />
     </div>
   );

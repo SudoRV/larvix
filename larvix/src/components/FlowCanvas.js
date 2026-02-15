@@ -27,7 +27,7 @@ export default function FlowCanvas() {
     /* ✅ Run only once safely after mount */
     useEffect(() => {
         const timer = setTimeout(() => {
-            fitView({ padding: 0.2 });
+            fitView({ padding: 2 });
         }, 0);
 
         return () => clearTimeout(timer);
@@ -137,7 +137,7 @@ export default function FlowCanvas() {
 
     return (
         <div
-            className="w-full h-full bg-neutral-900"
+            className="w-full h-full overflow-hidden  bg-neutral-900"
         >
             <ReactFlow
                 nodes={nodesWithHandlers}
@@ -150,12 +150,14 @@ export default function FlowCanvas() {
                 panOnScroll={false}
                 panOnDrag={true}
                 preventScrolling={true}
+                fitView={false}
+                autoPanOnNodeFocus={false}
                 onPaneScroll={handleWheel}
-                defaultViewport={{ x: 0, y: 0, zoom: 1 }}
 
                 nodesDraggable={true}
                 elementsSelectable={true}
                 nodeDragHandle=".drag-handle"
+
             >
                 <Background gap={20} size={1} color="#444" />
                 <Controls />
