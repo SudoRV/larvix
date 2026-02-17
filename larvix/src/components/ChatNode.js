@@ -33,8 +33,10 @@ const ChatNode = ({ id, data, selected }) => {
   const nodeRef = useRef(null);
   const branchButtonRef = useRef(null);
   const updateNodeInternals = useUpdateNodeInternals();
+  const newBranchRef = useRef(null);
+  const [dynamicHandles, setDynamicHandles] = useState([]);
 
-  const { toolState } = useStates();
+  const { toolState, setToolState } = useStates();
   const { getViewport } = useReactFlow();
 
   useEffect(() => {
@@ -42,8 +44,40 @@ const ChatNode = ({ id, data, selected }) => {
   }, [messages, loading]);
 
   useEffect(() => {
-    updateNodeInternals(id);
-  }, [messages]);
+    const el = chatRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+
+      setDynamicHandles(prev =>
+        prev.map(handle => {
+          const visibleY = handle.originalY - chatRef.current.scrollTop;
+
+          let clampedY = 0;
+
+          if (clampedY !== handle.originalY) {
+            updateNodeInternals(id);
+          }
+
+          if (visibleY < 0) {
+            clampedY = chatRef.current.scrollTop;
+          } else if (visibleY > nodeRef.current.clientHeight) {
+            clampedY = chatRef.current.scrollTop + nodeRef.current.clientHeight - 100;
+          } else {
+            clampedY = handle.originalY;
+          }
+
+          return {
+            ...handle,
+            y: clampedY
+          };
+        })
+      )
+    };
+
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [id, updateNodeInternals]);
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
@@ -92,12 +126,14 @@ const ChatNode = ({ id, data, selected }) => {
 
       // Remove style from previous element
       if (prevEl && prevEl !== el) {
-        prevEl.classList.remove("bg-blue-100", "text-black");
+        prevEl.classList.remove("bg-blue-100", "text-black", "w-fit");
       }
+
+      if (e.ctrlKey) return;
 
       // Add style to new element
       if (el && !el.classList.contains("not-branchable")) {
-        el.classList.add("bg-blue-100", "text-black");
+        el.classList.add("bg-blue-100", "text-black", "w-fit");
 
         // show branch button
         const el_rect = el.getBoundingClientRect();
@@ -108,13 +144,14 @@ const ChatNode = ({ id, data, selected }) => {
           (el_rect.left - node_rect.left + el_rect.width) / viewport.zoom + 10;
 
         const y =
-          (el_rect.top - node_rect.top) / viewport.zoom + el_rect.height / 2;
+          (el_rect.top - node_rect.top + el_rect.height / 2) / viewport.zoom;
 
-        if (!e.ctrlKey) {
-          branchButtonRef.current.style.top = `${y}px`;
-          branchButtonRef.current.style.left = `${x}px`;
-        }
+        branchButtonRef.current.style.top = `${y}px`;
+        branchButtonRef.current.style.left = `${x}px`;
 
+        branchButtonRef.current.onclick = () => {
+          createBranch(el_rect, el.innerHTML);
+        };
         branchButtonRef.current.classList.add("opacity-100");
 
         prevEl = el;
@@ -133,6 +170,44 @@ const ChatNode = ({ id, data, selected }) => {
 
   const isVisible = selected;
 
+  // creating branch from element
+  async function createBranch(newBranchRect, context) {
+    const chatRect = chatRef.current.getBoundingClientRect();
+    const viewport = getViewport();
+
+    const relativeX =
+      (newBranchRect.left - chatRect.left + newBranchRect.width) /
+      viewport.zoom +
+      20;
+
+    const relativeY =
+      (newBranchRect.top - chatRect.top) / viewport.zoom +
+      chatRef.current.scrollTop;
+
+    const newHandle = {
+      id: `handle-${Date.now()}`,
+      x: relativeX,
+      originalY: relativeY,
+      y: relativeY,
+      type: "source",
+    };
+
+    setDynamicHandles((prev) => [...prev, newHandle]);
+    // add new node 
+    data.onAddChild?.(
+      id,
+      newHandle.id,
+      { x: relativeX + 300, y: relativeY - chatRef.current.scrollTop - 80 },
+      context
+    );
+
+    const updateTimeout = setTimeout(() => {
+      updateNodeInternals(id);
+      setToolState((prev) => ({ ...prev, branch: false }));
+      clearInterval(updateTimeout);
+    })
+  }
+
   return (
     <div className={`group bg-gray-50 shadow-xl rounded-xl w-[400px] border border-gray-200 overflow-hidden flex flex-col justify-between
     ${collapsed ? "min-h-0" : "min-h-[80px]"
@@ -140,8 +215,25 @@ const ChatNode = ({ id, data, selected }) => {
 
       ref={nodeRef}
     >
+      {/* if element branch */}
+      {
+        data.context ? (
+          <>
+            <Handle type="target" position={Position.Left}
+              style={{
+                position: "absolute",
+                top: 24,
+                left: 0,
+                transform: "translate(-50%, -50%)",
+                zIndex: 1000
+              }} />
 
-      <Handle type="target" position={Position.Top} />
+            <div className="prose prose-sm max-w-none not-branchable  p-2 px-3 text-lg bg-blue-100" dangerouslySetInnerHTML={{ __html: data.context }} />
+          </>
+        ) : (
+          <Handle type="target" position={Position.Top} />
+        )
+      }
 
       {/* HEADER */}
       <div
@@ -186,7 +278,7 @@ const ChatNode = ({ id, data, selected }) => {
       {/* CHAT */}
       {!collapsed && (
         <div
-          className={`flex-1 p-3 space-y-3 transition-all duration-200 cursor-default max-h-screen overflow-y-auto custom-scroll not-branchable ${isVisible && "nodrag"
+          className={`flex-1 p-3 space-y-3 transition-all duration-200 cursor-default max-h-screen overflow-y-auto custom-scroll not-branchable relative ${isVisible && "nodrag"
             }`}
 
           onWheel={(e) => {
@@ -229,6 +321,30 @@ const ChatNode = ({ id, data, selected }) => {
 
             </div>
           )}
+
+          <Handle
+            id="dummy-init"
+            type="source"
+            position={Position.Left}
+            style={{ opacity: 0, position: "absolute" }}
+          />
+
+          {dynamicHandles.map((handle) => {
+            return (
+              <Handle
+                key={handle.id}
+                id={handle.id}
+                type="source"
+                position={Position.Right}
+                style={{
+                  position: "absolute",
+                  left: handle.x,
+                  top: handle.y,
+                  transform: "translate(-50%, -50%)",
+                }}
+              />
+            );
+          })}
 
           {messages.map((msg, index) => (
             <div

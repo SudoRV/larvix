@@ -86,7 +86,7 @@ export default function FlowCanvas() {
     );
 
     const addChild = useCallback(
-        (parentId) => {
+        (parentId, sourceHandleId, handlePosition, context) => {
             const newId = Date.now().toString();
             const parentNode = nodes.find((n) => n.id === parentId);
             if (!parentNode) return;
@@ -95,10 +95,10 @@ export default function FlowCanvas() {
                 id: newId,
                 type: "chat",
                 position: {
-                    x: parentNode.position.x,
-                    y: parentNode.position.y + parentNode.height + 100
+                    x: parentNode.position.x + (handlePosition?.x || 0),
+                    y: parentNode.position.y + (handlePosition?.y || 150)
                 },
-                data: { label: "New message" }
+                data: { label: sourceHandleId ? "Element branch" : "Node branch", context: context }
             };
 
             setNodes((nds) => [...nds, newNode]);
@@ -106,10 +106,12 @@ export default function FlowCanvas() {
             setEdges((eds) => [
                 ...eds,
                 {
-                    id: `e${parentId}-${newId}`,
+                    id: `e${parentId}-${sourceHandleId}-${newId}`,
                     source: parentId,
+                    sourceHandle: sourceHandleId,
                     target: newId,
-                    animated: true
+                    animated: true,
+                    zIndex: sourceHandleId && 1000
                 }
             ]);
         },
