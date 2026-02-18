@@ -1,12 +1,13 @@
 import { Handle, Position, useUpdateNodeInternals, useReactFlow } from "reactflow";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import {
   FiMic,
   FiX,
   FiGitBranch,
   FiChevronUp,
   FiChevronDown,
-  FiPlus
+  FiPlus,
+  FiArrowDown
 } from "react-icons/fi";
 import { useStates } from "../context/GlobalContext";
 
@@ -26,28 +27,42 @@ const ChatNode = ({ id, data, selected }) => {
   const [input, setInput] = useState("");
   const [collapsed, setCollapsed] = useState(false);
   const [selectedApi, setSelectedApi] = useState("chatgpt");
-  const [messages, setMessages] = useState([]);
+  // const [messages, setMessages] = useState([]);
+  const [ast, setAst] = useState([]);
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
+  const [scrollToBottomVisible, setScrollToBottomVisible] = useState(false);
   const chatRef = useRef(null);
   const nodeRef = useRef(null);
   const branchButtonRef = useRef(null);
   const updateNodeInternals = useUpdateNodeInternals();
   const newBranchRef = useRef(null);
   const [dynamicHandles, setDynamicHandles] = useState([]);
+  const initializedRef = useRef(false);
 
   const { toolState, setToolState } = useStates();
   const { getViewport } = useReactFlow();
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
 
+  useEffect(() => {
+    if (!initializedRef.current && data?.context) {
+      setInput(data.context);
+      initializedRef.current = true;
+    }
+  }, [data?.context]);
+
+  // adjust handels on scroll clamping
   useEffect(() => {
     const el = chatRef.current;
     if (!el) return;
 
     const onScroll = () => {
+
+      if (bottomRef.current.getBoundingClientRect().top - nodeRef.current.getBoundingClientRect().top - chatRef.current.clientHeight <= 0) {
+        setScrollToBottomVisible(false);
+      } else {
+        setScrollToBottomVisible(true);
+      }
 
       setDynamicHandles(prev =>
         prev.map(handle => {
@@ -79,13 +94,23 @@ const ChatNode = ({ id, data, selected }) => {
     return () => el.removeEventListener("scroll", onScroll);
   }, [id, updateNodeInternals]);
 
+  // ai response
   const handleSend = async () => {
     if (!input.trim() || loading) return;
 
-    const userMessage = { role: "user", content: input };
-    setMessages((prev) => [...prev, userMessage]);
+    const newUserNode = {
+      id: crypto.randomUUID(),   // safer than ast.length
+      role: "user",
+      ast: null,
+      html: `<p>${input}</p>`
+    };
+
+    setAst(prev => [...prev, newUserNode]);
+
     setInput("");
     setLoading(true);
+
+    let assistantNode;
 
     try {
       const res = await fetch("http://localhost:8000/api/ai", {
@@ -98,22 +123,41 @@ const ChatNode = ({ id, data, selected }) => {
       });
 
       const result = await res.json();
-      const html = await astToHtml(result.output);
 
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: html || "No response" }
-      ]);
+      assistantNode = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        ast: result.output,
+        html: await astToHtml(result.output)
+      };
     } catch (err) {
       console.log(err)
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "⚠ Server error." }
-      ]);
+      assistantNode = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        ast: null,
+        html: "<p>⚠ Server error.</p>"
+      };
     }
 
+    setAst(prev => [...prev, assistantNode]);
     setLoading(false);
   };
+
+  // update messages after ast updation
+  const messages = useMemo(() => {
+    console.log("ast changed: \n", ast);
+    return ast.map(node => ({
+      id: node.id,
+      role: node.role,
+      content: node.html
+    }));
+  }, [ast]);
+
+  // smooth scroll when message added
+  useEffect(() => {
+    // bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
   //element level branching
   useEffect(() => {
@@ -172,13 +216,16 @@ const ChatNode = ({ id, data, selected }) => {
 
   // creating branch from element
   async function createBranch(newBranchRect, context) {
+
+    const newBranchElt = document.elementFromPoint(newBranchRect.x, newBranchRect.y);
+
     const chatRect = chatRef.current.getBoundingClientRect();
     const viewport = getViewport();
 
     const relativeX =
       (newBranchRect.left - chatRect.left + newBranchRect.width) /
       viewport.zoom +
-      20;
+      10;
 
     const relativeY =
       (newBranchRect.top - chatRect.top) / viewport.zoom +
@@ -201,11 +248,73 @@ const ChatNode = ({ id, data, selected }) => {
       context
     );
 
+    // update ast 
+    const ast_id = newBranchElt.closest(".msg-container").id;
+    const targetNodeId = newBranchElt.getAttribute("data-node-id");
+
+    const msg_ast = ast.find(a => a.id === ast_id)?.ast;
+
+    if(!msg_ast) return;
+
+    const updatedTree = updateNodeById(
+      msg_ast,
+      targetNodeId,
+
+      (node) => {
+        const existingClasses = node.data?.hProperties?.className || [];
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            newHandleId: newHandle.id,
+            hProperties: {
+              ...(node.data?.hProperties || {}),
+              className: existingClasses.includes("branched") ? existingClasses : [...existingClasses, "branched"]
+            }
+          }
+        }
+      }
+    )
+
+    const updatedHtml = await astToHtml(updatedTree);
+
+    setAst(prev =>
+      prev.map(m =>
+        m.id === ast_id ? {
+          ...m,
+          ast: updatedTree,
+          html: updatedHtml
+        } : m
+      )
+    )
+
     const updateTimeout = setTimeout(() => {
       updateNodeInternals(id);
       setToolState((prev) => ({ ...prev, branch: false }));
       clearInterval(updateTimeout);
     })
+  }
+
+  function updateNodeById(node, nodeId, updater) {
+    if (!node) return node;
+
+    // If this is the target node
+    if (node.data?.nodeId === nodeId) {
+      return updater(node);  // return NEW modified node
+    }
+
+    // If node has children, recurse
+    if (node.children && Array.isArray(node.children)) {
+      return {
+        ...node,
+        children: node.children.map(child =>
+          updateNodeById(child, nodeId, updater)
+        )
+      };
+    }
+
+    return node;
   }
 
   return (
@@ -278,7 +387,7 @@ const ChatNode = ({ id, data, selected }) => {
       {/* CHAT */}
       {!collapsed && (
         <div
-          className={`flex-1 p-3 space-y-3 transition-all duration-200 cursor-default max-h-screen overflow-y-auto custom-scroll not-branchable relative ${isVisible && "nodrag"
+          className={`flex-1 p-3 pt-0 space-y-3 transition-all duration-200 cursor-default max-h-screen overflow-y-auto custom-scroll not-branchable relative ${isVisible && "nodrag"
             }`}
 
           onWheel={(e) => {
@@ -290,7 +399,7 @@ const ChatNode = ({ id, data, selected }) => {
           ref={chatRef}
         >
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 text-gray-500 not-branchable">
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 text-gray-500 not-branchable pt-3">
 
               <p className="text-sm font-medium text-gray-600 not-branchable">
                 Start a conversation
@@ -341,6 +450,13 @@ const ChatNode = ({ id, data, selected }) => {
                   left: handle.x,
                   top: handle.y,
                   transform: "translate(-50%, -50%)",
+
+                  width: 16,
+                  height: 16,
+                  background: "#2563eb",
+                  opacity: 0.6,
+                  border: "2px solid white",
+                  borderRadius: "50%",
                 }}
               />
             );
@@ -349,7 +465,8 @@ const ChatNode = ({ id, data, selected }) => {
           {messages.map((msg, index) => (
             <div
               key={index}
-              className={`flex select-text not-branchable ${msg.role === "user" ? "justify-end" : "justify-start"
+              id={msg.id}
+              className={`msg-container flex select-text not-branchable ${msg.role === "user" ? "justify-end" : "justify-start"
                 }`}
             >
               <div
@@ -404,6 +521,13 @@ const ChatNode = ({ id, data, selected }) => {
           />
         </div>
       )}
+
+      {/* scroll to bottom button  */}
+      <button className={`
+        absolute bottom-14 bg-gray-200 p-3 rounded-full left-1/2 translate-x-[-50%] shadow-xl hover:bg-gray-300 transition-all duration-200 ${scrollToBottomVisible ? "opacity-1" : "opacity-0"}
+        `} onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}>
+        <FiArrowDown size={20} />
+      </button>
 
       {/* Branch Button */}
       <div className="absolute bottom-0 left-0 w-full h-2 cursor-crosshair group/branch">

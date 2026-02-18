@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { parseMarkdownToAST } from "../services/markdownParser.js";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -17,5 +18,6 @@ export const callGemini = async (message) => {
     ]
   });
 
-  return result.response.text();
+  const ast_response = parseMarkdownToAST(result.response.text());
+  return ast_response;
 };

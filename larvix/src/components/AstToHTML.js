@@ -8,26 +8,38 @@ export async function astToHtml(ast) {
     .use(rehypeStringify);
 
   assignIds(ast);
-  console.log(ast)
   const file = await processor.run(ast);
   return processor.stringify(file);
 }
 
-function assignIds(ast) {
-  ast.children.forEach(node => {
-    if (!node.data) node.data = {};
-    node.data.blockId = generateId("block");
+function assignIds(node) {
+  if (!node) return;
 
-    // wrap block with div
-    node.data.hProperties = {
-      ...(node.data.hProperties || {}),
-      "data-block-id": node.data.blockId,
-      className: [
-        ...(node.data.hProperties?.className || []),
-        "branchable-block"
-      ]
-    };
-  });
+  if (!node.data) node.data = {};
+
+  node.data.nodeId = generateId("node");
+
+  const isBlock = [
+    "paragraph",
+    "heading",
+    "list",
+    "listItem",
+    "blockquote",
+    "code"
+  ].includes(node.type);
+
+  node.data.hProperties = {
+    ...(node.data.hProperties || {}),
+    "data-node-id": node.data.nodeId,
+    className: [
+      ...(node.data.hProperties?.className || []),
+      isBlock ? "branchable-block" : "branchable-inline"
+    ]
+  };
+
+  if (node.children) {
+    node.children.forEach(assignIds);
+  }
 }
 
 export function generateId(prefix = "node") {
