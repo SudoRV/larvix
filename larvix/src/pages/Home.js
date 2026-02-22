@@ -5,7 +5,7 @@ import Sidebar from "../components/Sidebar";
 import BottomToolbar from "../components/BottomToolbar";
 
 export default function Home() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <ReactFlowProvider>

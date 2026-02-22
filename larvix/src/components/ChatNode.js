@@ -7,28 +7,25 @@ import {
   FiChevronUp,
   FiChevronDown,
   FiPlus,
-  FiArrowDown
+  FiArrowDown,
+  FiCopy,
+  FiEdit2,
+  FiRefreshCw,
+  FiVolume2,
+  FiSend
 } from "react-icons/fi";
+import hljs from "highlight.js";
+
+import "highlight.js/styles/github-dark.css"; // or any theme
 import { useStates } from "../context/GlobalContext";
-
 import { astToHtml } from "./AstToHTML";
-
-export const SendButton = ({ onClick, disabled }) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    className="px-3 py-2 rounded-lg bg-black text-white text-xs hover:bg-gray-800 disabled:opacity-40 transition"
-  >
-    Send
-  </button>
-);
+import BlankChat from "../components/BlankChat";
+import StreamResponse from "../components/StreamResponse";
 
 const ChatNode = ({ id, data, selected }) => {
   const [input, setInput] = useState("");
   const [collapsed, setCollapsed] = useState(false);
   const [selectedApi, setSelectedApi] = useState("chatgpt");
-  // const [messages, setMessages] = useState([]);
-  const [ast, setAst] = useState([]);
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
   const [scrollToBottomVisible, setScrollToBottomVisible] = useState(false);
@@ -36,14 +33,13 @@ const ChatNode = ({ id, data, selected }) => {
   const nodeRef = useRef(null);
   const branchButtonRef = useRef(null);
   const updateNodeInternals = useUpdateNodeInternals();
-  const newBranchRef = useRef(null);
-  const [dynamicHandles, setDynamicHandles] = useState([]);
   const initializedRef = useRef(false);
 
-  const { toolState, setToolState } = useStates();
+  const { toolState } = useStates();
   const { getViewport } = useReactFlow();
 
 
+  // set context if element branched
   useEffect(() => {
     if (!initializedRef.current && data?.context) {
       setInput(data.context);
@@ -56,38 +52,46 @@ const ChatNode = ({ id, data, selected }) => {
     const el = chatRef.current;
     if (!el) return;
 
+    let ticking = false;
+
     const onScroll = () => {
+      if (ticking) return;
 
-      if (bottomRef.current.getBoundingClientRect().top - nodeRef.current.getBoundingClientRect().top - chatRef.current.clientHeight <= 0) {
-        setScrollToBottomVisible(false);
-      } else {
-        setScrollToBottomVisible(true);
-      }
+      ticking = true;
 
-      setDynamicHandles(prev =>
-        prev.map(handle => {
-          const visibleY = handle.originalY - chatRef.current.scrollTop;
+      requestAnimationFrame(() => {
+        const scrollTop = el.scrollTop;
+        const chatHeight = el.clientHeight;
+        const nodeHeight = nodeRef.current.clientHeight;
 
-          let clampedY = 0;
+        const bottomTop =
+          bottomRef.current.getBoundingClientRect().top;
+        const nodeTop =
+          nodeRef.current.getBoundingClientRect().top;
 
-          if (clampedY !== handle.originalY) {
-            updateNodeInternals(id);
-          }
+        data.onAddHandle(prev =>
+          prev.map(handle => {
+            const visibleY = handle.originalY - scrollTop;
+            let clampedY = handle.originalY;
 
-          if (visibleY < 0) {
-            clampedY = chatRef.current.scrollTop;
-          } else if (visibleY > nodeRef.current.clientHeight) {
-            clampedY = chatRef.current.scrollTop + nodeRef.current.clientHeight - 100;
-          } else {
-            clampedY = handle.originalY;
-          }
+            if (visibleY < 0) {
+              clampedY = scrollTop;
+            } else if (visibleY > nodeHeight) {
+              clampedY = scrollTop + nodeHeight - 100;
+            }
 
-          return {
-            ...handle,
-            y: clampedY
-          };
-        })
-      )
+            if (clampedY !== handle.y) {
+              return { ...handle, y: clampedY };
+            }
+
+            return handle;
+          })
+        );
+
+        updateNodeInternals(id);
+
+        ticking = false;
+      });
     };
 
     el.addEventListener("scroll", onScroll);
@@ -95,17 +99,20 @@ const ChatNode = ({ id, data, selected }) => {
   }, [id, updateNodeInternals]);
 
   // ai response
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
+  const handleSend = async (overrideInput) => {
+    const messageToSend = overrideInput ?? input;
+
+    if (!messageToSend?.trim() || loading) return;
 
     const newUserNode = {
-      id: crypto.randomUUID(),   // safer than ast.length
+      id: crypto.randomUUID(),
+      parent: id,
       role: "user",
       ast: null,
-      html: `<p>${input}</p>`
+      html: `<p>${messageToSend}</p>`
     };
 
-    setAst(prev => [...prev, newUserNode]);
+    data.onAddAst(prev => [...prev, newUserNode]);
 
     setInput("");
     setLoading(true);
@@ -118,7 +125,7 @@ const ChatNode = ({ id, data, selected }) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           api: selectedApi,
-          message: input
+          message: messageToSend
         })
       });
 
@@ -126,6 +133,7 @@ const ChatNode = ({ id, data, selected }) => {
 
       assistantNode = {
         id: crypto.randomUUID(),
+        parent: id,
         role: "assistant",
         ast: result.output,
         html: await astToHtml(result.output)
@@ -134,32 +142,45 @@ const ChatNode = ({ id, data, selected }) => {
       console.log(err)
       assistantNode = {
         id: crypto.randomUUID(),
+        parent: id,
         role: "assistant",
         ast: null,
         html: "<p>⚠ Server error.</p>"
       };
     }
 
-    setAst(prev => [...prev, assistantNode]);
+    data.onAddAst(prev => [...prev, assistantNode]);
     setLoading(false);
   };
 
   // update messages after ast updation
   const messages = useMemo(() => {
-    console.log("ast changed: \n", ast);
-    return ast.map(node => ({
+    console.log(data.ast)
+    return data.ast.filter(a => a.parent === id).map(node => ({
       id: node.id,
       role: node.role,
       content: node.html
     }));
-  }, [ast]);
+  }, [data.ast]);
 
-  // smooth scroll when message added
+  // smooth scroll when message added and code highlighting
   useEffect(() => {
+    const newUserMessage = messages[messages.length - 1];
+    const newUserMessageElement = newUserMessage ? document.getElementById(newUserMessage.id) : undefined;
+
+    if (newUserMessageElement && newUserMessage.role === "user") {
+      newUserMessageElement.scrollIntoView({ behavior: "smooth" });
+    } else return
+
+
     // bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+
+    document.querySelectorAll("pre code").forEach((block) => {
+      hljs.highlightElement(block);
+    });
   }, [messages, loading]);
 
-  //element level branching
+  //element level branching (hover)
   useEffect(() => {
     let prevEl = null;
 
@@ -188,15 +209,14 @@ const ChatNode = ({ id, data, selected }) => {
           (el_rect.left - node_rect.left + el_rect.width) / viewport.zoom + 10;
 
         const y =
-          (el_rect.top - node_rect.top + el_rect.height / 2) / viewport.zoom;
+          (el_rect.top - chatRef.current.getBoundingClientRect().top) / viewport.zoom + chatRef.current.scrollTop;
 
         branchButtonRef.current.style.top = `${y}px`;
         branchButtonRef.current.style.left = `${x}px`;
 
         branchButtonRef.current.onclick = () => {
-          createBranch(el_rect, el.innerHTML);
+          createBranch(el_rect, el.innerText);
         };
-        branchButtonRef.current.classList.add("opacity-100");
 
         prevEl = el;
       } else {
@@ -212,8 +232,6 @@ const ChatNode = ({ id, data, selected }) => {
     };
   }, [toolState]);
 
-  const isVisible = selected;
-
   // creating branch from element
   async function createBranch(newBranchRect, context) {
 
@@ -228,18 +246,20 @@ const ChatNode = ({ id, data, selected }) => {
       10;
 
     const relativeY =
-      (newBranchRect.top - chatRect.top) / viewport.zoom +
+      (newBranchRect.top - chatRect.top - 3) / viewport.zoom +
       chatRef.current.scrollTop;
 
     const newHandle = {
-      id: `handle-${Date.now()}`,
+      id: `handle-${crypto.randomUUID()}`,
+      parent: id,
       x: relativeX,
       originalY: relativeY,
       y: relativeY,
       type: "source",
     };
 
-    setDynamicHandles((prev) => [...prev, newHandle]);
+    // add new handle
+    data.onAddHandle((prev) => [...prev, newHandle]);
     // add new node 
     data.onAddChild?.(
       id,
@@ -252,9 +272,9 @@ const ChatNode = ({ id, data, selected }) => {
     const ast_id = newBranchElt.closest(".msg-container").id;
     const targetNodeId = newBranchElt.getAttribute("data-node-id");
 
-    const msg_ast = ast.find(a => a.id === ast_id)?.ast;
+    const msg_ast = data.ast.find(a => a.id === ast_id)?.ast;
 
-    if(!msg_ast) return;
+    if (!msg_ast) return;
 
     const updatedTree = updateNodeById(
       msg_ast,
@@ -262,6 +282,8 @@ const ChatNode = ({ id, data, selected }) => {
 
       (node) => {
         const existingClasses = node.data?.hProperties?.className || [];
+
+        console.log(existingClasses)
 
         return {
           ...node,
@@ -279,7 +301,7 @@ const ChatNode = ({ id, data, selected }) => {
 
     const updatedHtml = await astToHtml(updatedTree);
 
-    setAst(prev =>
+    data.onAddAst(prev =>
       prev.map(m =>
         m.id === ast_id ? {
           ...m,
@@ -289,11 +311,7 @@ const ChatNode = ({ id, data, selected }) => {
       )
     )
 
-    const updateTimeout = setTimeout(() => {
-      updateNodeInternals(id);
-      setToolState((prev) => ({ ...prev, branch: false }));
-      clearInterval(updateTimeout);
-    })
+    updateNodeInternals(id);
   }
 
   function updateNodeById(node, nodeId, updater) {
@@ -317,8 +335,76 @@ const ChatNode = ({ id, data, selected }) => {
     return node;
   }
 
+  const handleCopy = (html) => {
+    const text = new DOMParser().parseFromString(html, "text/html").body.textContent;
+    navigator.clipboard.writeText(text);
+  };
+
+  const handleEdit = (event, msg) => {
+    const container = document.getElementById(msg.id);
+    if (!container) return;
+
+    const msgElement = container.firstElementChild;
+    if (!msgElement) return;
+
+    msgElement.contentEditable = "true";
+    msgElement.style.width = "100%";
+    msgElement.focus();
+
+    // 🔹 Move cursor to end
+    const range = document.createRange();
+    const selection = window.getSelection();
+
+    range.selectNodeContents(msgElement);
+    range.collapse(false); // collapse to end
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    // 🔹 Handle Enter (submit)
+    const handleKeyDown = (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+
+        const newText = msgElement.innerText.trim();
+        msgElement.blur(); // trigger focusout
+
+        if (newText) {
+          data.onAddAst(prev => prev.filter((a, index) => index < data.ast.indexOf(data.ast.find(a => a.id === msg.id))))
+          handleSend(newText);
+        }
+      }
+    };
+
+    // 🔹 Handle focus out
+    const handleBlur = () => {
+      msgElement.contentEditable = "false";
+      msgElement.style.width = "fit-content";
+
+      msgElement.removeEventListener("keydown", handleKeyDown);
+      msgElement.removeEventListener("blur", handleBlur);
+    };
+
+    msgElement.addEventListener("keydown", handleKeyDown);
+    msgElement.addEventListener("blur", handleBlur);
+  };
+
+  const handleRegenerate = () => {
+    const input = new DOMParser().parseFromString(messages[messages.length - 2].content, "text/html").body.textContent;
+    data.onAddAst(prev => prev.filter((a, index) => index < data.ast.length - 2))
+    handleSend(input.trim());
+  };
+
+  const handleReadAloud = (html) => {
+    const text = new DOMParser().parseFromString(html, "text/html").body.textContent;
+    const utterance = new SpeechSynthesisUtterance(text);
+    speechSynthesis.speak(utterance);
+  };
+
+  const isVisible = selected;
+
   return (
-    <div className={`group bg-gray-50 shadow-xl rounded-xl w-[400px] border border-gray-200 overflow-hidden flex flex-col justify-between
+    <div className={`node group bg-gray-50 shadow-xl rounded-xl w-[400px] border border-gray-200 overflow-hidden flex flex-col justify-between
     ${collapsed ? "min-h-0" : "min-h-[80px]"
       }`}
 
@@ -337,7 +423,7 @@ const ChatNode = ({ id, data, selected }) => {
                 zIndex: 1000
               }} />
 
-            <div className="prose prose-sm max-w-none not-branchable  p-2 px-3 text-lg bg-blue-100" dangerouslySetInnerHTML={{ __html: data.context }} />
+            <div className="not-branchable p-2 px-3 font-bold text-lg text-neutral-800 bg-blue-100" dangerouslySetInnerHTML={{ __html: data.context }} />
           </>
         ) : (
           <Handle type="target" position={Position.Top} />
@@ -387,7 +473,7 @@ const ChatNode = ({ id, data, selected }) => {
       {/* CHAT */}
       {!collapsed && (
         <div
-          className={`flex-1 p-3 pt-0 space-y-3 transition-all duration-200 cursor-default max-h-screen overflow-y-auto custom-scroll not-branchable relative ${isVisible && "nodrag"
+          className={`group/branch flex-1 p-3 pt-0 space-y-3 transition-all duration-200 cursor-default max-h-screen overflow-x-hidden overflow-y-auto custom-scroll not-branchable relative ${isVisible && "nodrag"
             }`}
 
           onWheel={(e) => {
@@ -398,47 +484,13 @@ const ChatNode = ({ id, data, selected }) => {
 
           ref={chatRef}
         >
-          {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 text-gray-500 not-branchable pt-3">
 
-              <p className="text-sm font-medium text-gray-600 not-branchable">
-                Start a conversation
-              </p>
+          <BlankChat messages={messages} setInput={setInput} />
 
-              <div className="flex flex-wrap justify-center gap-2 not-branchable">
-                {[
-                  "Ask anything",
-                  "Summarize topic",
-                  "Generate ideas",
-                  "backpropagation",
-                  "Branch chat"
-                ].map((item) => (
-                  <button
-                    key={item}
-                    onClick={() => setInput(item)}
-                    className="
-            px-4 py-2 text-xs rounded-full
-            bg-white border border-gray-300
-            hover:bg-black hover:text-white
-            transition not-branchable
-          "
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
+          <Handle id="dummy-init" type="source" position={Position.Left} style={{ opacity: 0, position: "absolute" }} />
 
-            </div>
-          )}
-
-          <Handle
-            id="dummy-init"
-            type="source"
-            position={Position.Left}
-            style={{ opacity: 0, position: "absolute" }}
-          />
-
-          {dynamicHandles.map((handle) => {
+          {data.dynamicHandles.map((handle) => {
+            if (handle.parent !== id) return;
             return (
               <Handle
                 key={handle.id}
@@ -464,19 +516,97 @@ const ChatNode = ({ id, data, selected }) => {
 
           {messages.map((msg, index) => (
             <div
-              key={index}
+              key={msg.id}
               id={msg.id}
-              className={`msg-container flex select-text not-branchable ${msg.role === "user" ? "justify-end" : "justify-start"
+              className={`msg-container not-branchable group flex flex-col select-text ${msg.role === "user" ? "items-end group/tools !mt-4" : "items-start !m-0"
                 }`}
             >
-              <div
-                className={`px-3 py-2 rounded-lg text-sm prose prose-sm max-w-none not-branchable ${msg.role === "user"
-                  ? "bg-neutral-800 text-white"
-                  : " text-gray-800"
-                  }`}
+              {/* Message Bubble */}
+              {
+                index === messages.length - 1 ? (
+                  <StreamResponse message={msg} bottomRef={bottomRef} setScrollToBottomVisible={setScrollToBottomVisible} />
+                ) : (
+                  <div
+                    className={`px-3 py-2 rounded-lg text-sm
+                      not-branchable
+                      prose prose-sm
+                      max-w-[100%] break-words
+                      prose-pre:bg-[#1d1f24]
+                      prose-pre:text-gray-200
+                      prose-pre:border
+                      prose-pre:border-gray-700
+                      prose-pre:rounded-lg
+                      prose-pre:p-4
+                      prose-pre:overflow-x-auto
+                      ${msg.role === "user"
+                        ? "bg-neutral-800 text-white"
+                        : "text-gray-800 pt-0 px-1.5"
+                      }
+      `}
+                    dangerouslySetInnerHTML={{ __html: msg.content }}
+                  />
+                )
+              }
 
-                dangerouslySetInnerHTML={{ __html: msg.content }}
-              >
+
+
+              {/* Action Row */}
+              <div className={`
+                flex gap-2 mt-1
+                text-gray-400
+
+                ${msg.role === "user" ? "opacity-0" : "opacity-100"}
+                
+                transition-all
+                duration-300
+                group-hover/tools:opacity-100
+              `}>
+
+                {msg.role === "user" ? (
+                  <>
+                    <button
+                      onClick={(e) => handleEdit(e, msg)}
+                      className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
+                      title="Edit"
+                    >
+                      <FiEdit2 size={16} />
+                    </button>
+
+                    <button
+                      onClick={() => handleCopy(msg.content)}
+                      className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
+                      title="Copy"
+                    >
+                      <FiCopy size={16} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => handleCopy(msg.content)}
+                      className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
+                      title="Copy"
+                    >
+                      <FiCopy size={16} />
+                    </button>
+
+                    <button
+                      onClick={() => handleRegenerate()}
+                      className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
+                      title="Regenerate"
+                    >
+                      <FiRefreshCw size={16} />
+                    </button>
+
+                    {/* <button
+                      onClick={() => handleReadAloud(msg.content)}
+                      className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
+                      title="Read aloud"
+                    >
+                      <FiVolume2 size={18} />
+                    </button> */}
+                  </>
+                )}
               </div>
             </div>
           ))}
@@ -487,6 +617,22 @@ const ChatNode = ({ id, data, selected }) => {
             </div>
           )}
 
+          {/* branch element button */}
+          {toolState.branch && messages.length > 0 && (
+            <button
+              ref={branchButtonRef}
+              className="absolute right-1 top-1 -translate-y-1/2 w-9 h-9
+            rounded-full bg-blue-500 hover:bg-blue-600 text-white flex items-center justify-center shadow-lg
+
+            scale-0 opacity-0
+            group-hover/branch:opacity-100
+            group-hover/branch:scale-100
+            transition-all duration-150
+            "
+            >
+              <FiGitBranch size={20} />
+            </button>
+          )}
           <div ref={bottomRef} />
         </div>
       )}
@@ -510,26 +656,33 @@ const ChatNode = ({ id, data, selected }) => {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            onKeyDown={(e) => e.key === "Enter" && handleSend(undefined)}
             placeholder="Type a message..."
             className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
           />
 
-          <SendButton
-            onClick={handleSend}
+          <button
+            onClick={() => handleSend(undefined)}
             disabled={!input.trim() || loading}
-          />
+            className="px-3 py-2 rounded-lg bg-blue-500 text-white text-xs hover:bg-blue-600 disabled:opacity-40 transition"
+          >
+            <FiSend />
+          </button>
         </div>
       )}
 
       {/* scroll to bottom button  */}
-      <button className={`
-        absolute bottom-14 bg-gray-200 p-3 rounded-full left-1/2 translate-x-[-50%] shadow-xl hover:bg-gray-300 transition-all duration-200 ${scrollToBottomVisible ? "opacity-1" : "opacity-0"}
-        `} onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}>
-        <FiArrowDown size={20} />
-      </button>
+      {
+        !collapsed && (
+          <button className={`
+            absolute bottom-14 bg-gray-200 p-3 rounded-full left-1/2 translate-x-[-50%] shadow-xl hover:bg-gray-300 transition-all duration-200 ${scrollToBottomVisible ? "opacity-1" : "opacity-0"}
+            `} onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}>
+            <FiArrowDown size={20} />
+          </button>
+        )
+      }
 
-      {/* Branch Button */}
+      {/* Branch Node Button */}
       <div className="absolute bottom-0 left-0 w-full h-2 cursor-crosshair group/branch">
 
         <div className="absolute bottom-0 left-0 w-full h-full z-20" />
@@ -550,33 +703,6 @@ const ChatNode = ({ id, data, selected }) => {
         </div>
 
       </div>
-
-      {/* branch element button */}
-      {toolState.branch && (
-        <button
-          ref={branchButtonRef}
-          className="
-            absolute
-            -right-3
-            top-1/2
-            -translate-y-1/2
-            w-6
-            h-6
-            rounded-full
-            bg-blue-500
-            hover:bg-blue-600
-            text-white
-            flex
-            items-center
-            justify-center
-            shadow-lg
-            transition-all
-            duration-100
-          "
-        >
-          <FiPlus size={18} />
-        </button>
-      )}
 
       <Handle type="source" position={Position.Bottom} />
     </div>

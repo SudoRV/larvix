@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import ReactFlow, {
     Background,
     Controls,
@@ -78,6 +78,8 @@ export default function FlowCanvas() {
 
     const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+    const [dynamicHandles, setDynamicHandles] = useState([]);
+    const [ast, setAst] = useState([]);
 
     const onConnect = useCallback(
         (params) =>
@@ -87,7 +89,7 @@ export default function FlowCanvas() {
 
     const addChild = useCallback(
         (parentId, sourceHandleId, handlePosition, context) => {
-            const newId = Date.now().toString();
+            const newId = crypto.randomUUID();
             const parentNode = nodes.find((n) => n.id === parentId);
             if (!parentNode) return;
 
@@ -103,37 +105,41 @@ export default function FlowCanvas() {
 
             setNodes((nds) => [...nds, newNode]);
 
-            setEdges((eds) => [
-                ...eds,
-                {
-                    id: `e${parentId}-${sourceHandleId}-${newId}`,
-                    source: parentId,
-                    sourceHandle: sourceHandleId,
-                    target: newId,
-                    animated: true,
-                    zIndex: sourceHandleId && 1000
-                }
-            ]);
+            const newEdge = {
+                id: `e${parentId}-${sourceHandleId}-${newId}`,
+                source: parentId,
+                sourceHandle: sourceHandleId,
+                target: newId,
+                animated: true,
+                zIndex: sourceHandleId && 1000
+            }
+
+            setEdges((eds) => [...eds, newEdge]);
         },
-        [nodes, setNodes, setEdges]
+        [nodes, edges, setNodes, setEdges]
     );
 
     const deleteNode = useCallback(
-        (id) => {
+        (id) => {        
+            setDynamicHandles((prev) => prev.filter((p) => p.id !== edges.find(e => e.target === id)?.sourceHandle));
+            
             setNodes((nds) => nds.filter((n) => n.id !== id));
             setEdges((eds) =>
                 eds.filter((e) => e.source !== id && e.target !== id)
             );
         },
-        [setNodes, setEdges]
+        [nodes, edges, setNodes, setEdges]
     );
 
     const nodesWithHandlers = nodes.map((n) => ({
         ...n,
         data: {
             ...n.data,
+            dynamicHandles, onAddHandle: setDynamicHandles,
             onAddChild: addChild,
-            onDelete: deleteNode
+            onDelete: deleteNode,
+
+            ast, onAddAst: setAst
         }
     }));
 

@@ -36,5 +36,7 @@ html, body{
 
 
 .branched {
-  background-color: red;
+  background-color: #bcd8f7;
+  width: fit-content;
+  color: black;
 }
