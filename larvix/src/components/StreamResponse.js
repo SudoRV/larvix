@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 
-const StreamResponse = React.memo(function StreamResponse({ message, bottomRef, setScrollToBottomVisible }) {
+const StreamResponse = React.memo(function StreamResponse({ isLast, message, bottomRef, setScrollToBottomVisible, updateNodeInternals }) {
 
     const messageRef = useRef(null);
     const autoScroll = useRef(true);
@@ -23,15 +23,20 @@ const StreamResponse = React.memo(function StreamResponse({ message, bottomRef, 
                 const textNode = document.createTextNode("");
                 parentEl.appendChild(textNode);
 
-                for (let char of node.textContent) {
-                    if (cancelled) return;
-                    textNode.textContent += char;
-
-                    if (autoScroll.current) {
-                        bottomRef.current.scrollIntoView({ behavior: "smooth" });
+                if(message.role === "assistant" && Date.now() - message.timestamp < 3000){
+                    for (let char of node.textContent) {
+                        if (cancelled) return;
+                        textNode.textContent += char;
+    
+                        if (autoScroll.current) {
+                            bottomRef.current.scrollIntoView({ behavior: "smooth" });
+                            updateNodeInternals()
+                        }
+    
+                        await sleep(5);
                     }
-
-                    await sleep(7);
+                } else {
+                    textNode.textContent = node.textContent;
                 }
 
             } else if (node.nodeType === Node.ELEMENT_NODE) {
@@ -58,24 +63,29 @@ const StreamResponse = React.memo(function StreamResponse({ message, bottomRef, 
         startStreaming();
 
         // check for wheen up
-        function handleAutoScroll(event) {
-            if (event.deltaY < 0) {
+        function handleAutoScroll() {
+            const container = bottomRef.current.parentElement;
+
+            const isNearBottom =
+                container.scrollHeight - container.scrollTop - container.clientHeight < 40;
+
+            if (!isNearBottom) {
                 autoScroll.current = false;
                 setScrollToBottomVisible(true);
-            } else if (bottomRef.current.getBoundingClientRect().bottom + 12 >= bottomRef.current.parentElement.getBoundingClientRect().bottom) {
+            } else {
                 autoScroll.current = true;
                 setScrollToBottomVisible(false);
             }
         }
 
-        bottomRef.current.parentElement.addEventListener("wheel", handleAutoScroll)
+        bottomRef.current.parentElement.addEventListener("scroll", handleAutoScroll)
 
         return () => {
             cancelled = true;
-            bottomRef.current.parentElement.removeEventListener("wheel", handleAutoScroll);
+            bottomRef.current?.parentElement.removeEventListener("scroll", handleAutoScroll);
         };
 
-    }, [message.id]);
+    }, [message.content]);
 
     return (
         <div
@@ -95,9 +105,7 @@ const StreamResponse = React.memo(function StreamResponse({ message, bottomRef, 
                     ? "bg-neutral-800 text-white"
                     : "text-gray-800 pt-0 px-1.5"
                 }
-      `}
-        // dangerouslySetInnerHTML={{ __html: message.role === "user" ? message.content : streamMessages }}
-        />
+      `}/>
     );
 });
 

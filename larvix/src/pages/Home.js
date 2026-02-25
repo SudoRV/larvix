@@ -17,7 +17,7 @@ export default function Home() {
         {/* Main Section */}
         <div className="flex-1 bg-red-50 flex flex-col relative">
 
-          {/* Toggle Button */}
+          {/* Toggle Button
           {!sidebarOpen && (
             <button
               onClick={() => setSidebarOpen(true)}
@@ -25,7 +25,7 @@ export default function Home() {
             >
               ☰
             </button>
-          )}
+          )} */}
 
           {/* Canvas */}
           <div className="flex-1">

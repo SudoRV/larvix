@@ -2,7 +2,7 @@ export default function BlankPage({ messages, setInput }) {
     return (
         <>
             {messages.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-full text-center space-y-4 text-gray-500 not-branchable pt-3">
+                <div className="flex flex-col items-center justify-center h-[96%] text-center space-y-4 text-gray-500 not-branchable">
 
                     <p className="text-sm font-medium text-gray-600 not-branchable">
                         Start a conversation

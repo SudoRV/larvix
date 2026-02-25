@@ -1,5 +1,5 @@
 import { Handle, Position, useUpdateNodeInternals, useReactFlow } from "reactflow";
-import { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   FiMic,
   FiX,
@@ -35,9 +35,47 @@ const ChatNode = ({ id, data, selected }) => {
   const updateNodeInternals = useUpdateNodeInternals();
   const initializedRef = useRef(false);
 
-  const { toolState } = useStates();
+  const { toolState, setToolState } = useStates();
   const { getViewport } = useReactFlow();
 
+  const [canvasSize, setCanvasSize] = useState({
+    width: 0,
+    height: 0,
+  });
+
+  useEffect(() => {
+    const canvas = document.querySelector(".react-flow");
+
+    if (!canvas) return;
+
+    const updateSize = () => {
+      const newWidth = canvas.clientWidth;
+      const newHeight = canvas.clientHeight;
+
+      setCanvasSize(prev => {
+        // prevent unnecessary re-renders
+        if (
+          prev.width === newWidth &&
+          prev.height === newHeight
+        ) {
+          return prev;
+        }
+
+        return {
+          width: newWidth,
+          height: newHeight,
+        };
+      });
+    };
+
+    // Initial measurement
+    updateSize();
+
+    const resizeObserver = new ResizeObserver(updateSize);
+    resizeObserver.observe(canvas);
+
+    return () => resizeObserver.disconnect();
+  }, []);
 
   // set context if element branched
   useEffect(() => {
@@ -75,9 +113,9 @@ const ChatNode = ({ id, data, selected }) => {
             let clampedY = handle.originalY;
 
             if (visibleY < 0) {
-              clampedY = scrollTop;
+              clampedY = scrollTop - 40;
             } else if (visibleY > nodeHeight) {
-              clampedY = scrollTop + nodeHeight - 100;
+              clampedY = scrollTop + nodeHeight - 40;
             }
 
             if (clampedY !== handle.y) {
@@ -105,6 +143,7 @@ const ChatNode = ({ id, data, selected }) => {
     if (!messageToSend?.trim() || loading) return;
 
     const newUserNode = {
+      timestamp: Date.now(),
       id: crypto.randomUUID(),
       parent: id,
       role: "user",
@@ -132,6 +171,7 @@ const ChatNode = ({ id, data, selected }) => {
       const result = await res.json();
 
       assistantNode = {
+        timestamp: Date.now(),
         id: crypto.randomUUID(),
         parent: id,
         role: "assistant",
@@ -141,6 +181,7 @@ const ChatNode = ({ id, data, selected }) => {
     } catch (err) {
       console.log(err)
       assistantNode = {
+        timestamp: Date.now(),
         id: crypto.randomUUID(),
         parent: id,
         role: "assistant",
@@ -157,11 +198,12 @@ const ChatNode = ({ id, data, selected }) => {
   const messages = useMemo(() => {
     console.log(data.ast)
     return data.ast.filter(a => a.parent === id).map(node => ({
+      timestamp: node.timestamp,
       id: node.id,
       role: node.role,
       content: node.html
     }));
-  }, [data.ast]);
+  }, [data.ast, id]);
 
   // smooth scroll when message added and code highlighting
   useEffect(() => {
@@ -171,7 +213,6 @@ const ChatNode = ({ id, data, selected }) => {
     if (newUserMessageElement && newUserMessage.role === "user") {
       newUserMessageElement.scrollIntoView({ behavior: "smooth" });
     } else return
-
 
     // bottomRef.current?.scrollIntoView({ behavior: "smooth" });
 
@@ -230,12 +271,27 @@ const ChatNode = ({ id, data, selected }) => {
     return () => {
       node?.removeEventListener("mousemove", handleMove);
     };
-  }, [toolState]);
+  }, [toolState.branch, data.ast]);
+
+  // home button function ( make node activenode / focus node )
+  useEffect(() => {
+    console.log(toolState.home.state)
+    if (toolState.home.state && selected) {
+      console.log("setting")
+      setToolState(prev => ({
+        ...prev,
+        home: { ...toolState.home, state: true, activeNode: id }
+      }))
+    }
+  }, [selected]);
 
   // creating branch from element
   async function createBranch(newBranchRect, context) {
 
     const newBranchElt = document.elementFromPoint(newBranchRect.x, newBranchRect.y);
+
+    const ast_id = newBranchElt.closest(".msg-container").id;
+    const targetNodeId = newBranchElt.getAttribute("data-node-id");
 
     const chatRect = chatRef.current.getBoundingClientRect();
     const viewport = getViewport();
@@ -258,20 +314,16 @@ const ChatNode = ({ id, data, selected }) => {
       type: "source",
     };
 
-    // add new handle
-    data.onAddHandle((prev) => [...prev, newHandle]);
     // add new node 
     data.onAddChild?.(
       id,
-      newHandle.id,
+      newHandle,
       { x: relativeX + 300, y: relativeY - chatRef.current.scrollTop - 80 },
-      context
+      context,
+      ast_id
     );
 
     // update ast 
-    const ast_id = newBranchElt.closest(".msg-container").id;
-    const targetNodeId = newBranchElt.getAttribute("data-node-id");
-
     const msg_ast = data.ast.find(a => a.id === ast_id)?.ast;
 
     if (!msg_ast) return;
@@ -283,16 +335,14 @@ const ChatNode = ({ id, data, selected }) => {
       (node) => {
         const existingClasses = node.data?.hProperties?.className || [];
 
-        console.log(existingClasses)
-
         return {
           ...node,
           data: {
             ...node.data,
-            newHandleId: newHandle.id,
+            branchId: newHandle.id,
             hProperties: {
               ...(node.data?.hProperties || {}),
-              className: existingClasses.includes("branched") ? existingClasses : [...existingClasses, "branched"]
+              className: existingClasses.includes("branched") ? existingClasses : [...existingClasses, "branched", `branchedto-${newHandle.id}`]
             }
           }
         }
@@ -310,7 +360,11 @@ const ChatNode = ({ id, data, selected }) => {
         } : m
       )
     )
-
+    // console.log(updatedTree, updatedHtml)
+    setToolState(prev => ({
+      ...prev,
+      branch: false
+    }))
     updateNodeInternals(id);
   }
 
@@ -402,156 +456,153 @@ const ChatNode = ({ id, data, selected }) => {
   };
 
   const isVisible = selected;
+  const isFocused = toolState.home.activeNode === id;
 
   return (
-    <div className={`node group bg-gray-50 shadow-xl rounded-xl w-[400px] border border-gray-200 overflow-hidden flex flex-col justify-between
-    ${collapsed ? "min-h-0" : "min-h-[80px]"
-      }`}
-
-      ref={nodeRef}
-    >
+    <>
       {/* if element branch */}
       {
-        data.context ? (
+        data.context && !isFocused ? (
           <>
             <Handle type="target" position={Position.Left}
               style={{
                 position: "absolute",
-                top: 24,
+                top: 22,
                 left: 0,
                 transform: "translate(-50%, -50%)",
                 zIndex: 1000
               }} />
 
-            <div className="not-branchable p-2 px-3 font-bold text-lg text-neutral-800 bg-blue-100" dangerouslySetInnerHTML={{ __html: data.context }} />
+            <div className="not-branchable mb-2 p-2 px-3 rounded-xl font-bold text-lg text-neutral-800 bg-blue-200 w-fit max-w-[460px]" dangerouslySetInnerHTML={{ __html: data.context }} />
           </>
         ) : (
           <Handle type="target" position={Position.Top} />
         )
       }
-
-      {/* HEADER */}
+      
       <div
-        className={`
-          w-full bg-gray-100 px-3 py-2
-          flex items-center justify-between
-          transition-all duration-200 z-10 cursor-grab active:cursor-grabbing shadow-md
-          ${!collapsed && (
-            isVisible
-              ? "py-2 opacity-100"
-              : "py-0 h-0 opacity-0 group-hover:py-2 group-hover:h-auto group-hover:opacity-100"
-          )
+        style={
+          isFocused
+            ? {
+              width: canvasSize.width,
+              height: canvasSize.height,
+            }
+            : undefined
+        }
+
+        className={`node group bg-gray-50 shadow-xl rounded-xl max-h-screen border border-gray-200 overflow-hidden flex flex-col justify-between
+    ${collapsed ? "min-h-0" : "min-h-[80px]"
           }
-        `}
+
+      ${isFocused
+            ? "bg-transparent !rounded-none border-0 shadow-non"
+            : "w-[460px] border border-gray-200"
+          }
+      
+    `}
+
+        ref={nodeRef}
       >
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedApi}
-            onChange={(e) => setSelectedApi(e.target.value)}
-            className="text-xs border border-gray-300 rounded px-2 py-1 bg-white outline-none cursor-pointer"
-          >
-            <option value="chatgpt">ChatGPT</option>
-            <option value="gemini">Gemini</option>
-          </select>
+        {/* HEADER */}
+        <div
+          className={`
+          w-full bg-gray-50 px-3 py-2
+          flex items-center justify-between
+          transition-all duration-200 z-10
+          ${!collapsed && (
+              isVisible
+                ? "py-2 opacity-100"
+                : isFocused ? "" : "py-0 h-0 opacity-0 group-hover:py-2 group-hover:h-auto group-hover:opacity-100"
+            )
+            }
+
+          ${isFocused && "!bg-transparent nodrag nopan"} 
+        `}
+        >
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedApi}
+              onChange={(e) => setSelectedApi(e.target.value)}
+              className="text-xs border border-gray-300 rounded px-2 py-1 bg-white outline-none cursor-pointer"
+            >
+              <option value="chatgpt">ChatGPT</option>
+              <option value="gemini">Gemini</option>
+            </select>
+
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="text-gray-500 hover:text-black"
+            >
+              {collapsed ? <FiChevronDown size={16} /> : <FiChevronUp size={14} />}
+            </button>
+          </div>
 
           <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="text-gray-500 hover:text-black"
+            onClick={() => data.onDelete?.(id)}
+            className="p-1 text-gray-400 hover:text-red-500"
           >
-            {collapsed ? <FiChevronDown size={16} /> : <FiChevronUp size={14} />}
+            <FiX size={16} />
           </button>
         </div>
 
-        <button
-          onClick={() => data.onDelete?.(id)}
-          className="p-1 text-gray-400 hover:text-red-500"
-        >
-          <FiX size={16} />
-        </button>
-      </div>
+        {/* CHAT */}
+        {!collapsed && (
+          <div
+            className={`group/branch flex-1 p-3 pt-0 space-y-3 transition-all duration-200 cursor-default min-h-0 overflow-x-hidden overflow-y-auto scroll-smooth custom-scroll not-branchable relative ${isVisible && "nodrag nopan"} ${isFocused && "nodrag nopan"}
+            `}
 
-      {/* CHAT */}
-      {!collapsed && (
-        <div
-          className={`group/branch flex-1 p-3 pt-0 space-y-3 transition-all duration-200 cursor-default max-h-screen overflow-x-hidden overflow-y-auto custom-scroll not-branchable relative ${isVisible && "nodrag"
-            }`}
+            // onWheel={(e) => {
+            //   e.stopPropagation();
+            //   const el = e.currentTarget;
+            //   el.scrollTop += e.deltaY;
+            // }}
 
-          onWheel={(e) => {
-            e.stopPropagation();
-            const el = e.currentTarget;
-            el.scrollTop += e.deltaY;
-          }}
+            ref={chatRef}
+          >
 
-          ref={chatRef}
-        >
+            <BlankChat messages={messages} setInput={setInput} />
 
-          <BlankChat messages={messages} setInput={setInput} />
+            <Handle id="dummy-init" type="source" position={Position.Left} style={{ opacity: 0, position: "absolute" }} />
 
-          <Handle id="dummy-init" type="source" position={Position.Left} style={{ opacity: 0, position: "absolute" }} />
+            {data.dynamicHandles.filter(dh => dh.parent === id && dh.parent !== toolState.home.activeNode).map((handle) => {
+              if (handle.parent !== id) return;
+              return (
+                <Handle
+                  key={handle.id}
+                  id={handle.id}
+                  type="source"
+                  position={Position.Right}
+                  style={{
+                    position: "absolute",
+                    left: handle.x,
+                    top: handle.y,
+                    transform: "translate(-50%, -50%)",
 
-          {data.dynamicHandles.map((handle) => {
-            if (handle.parent !== id) return;
-            return (
-              <Handle
-                key={handle.id}
-                id={handle.id}
-                type="source"
-                position={Position.Right}
-                style={{
-                  position: "absolute",
-                  left: handle.x,
-                  top: handle.y,
-                  transform: "translate(-50%, -50%)",
+                    width: 16,
+                    height: 16,
+                    background: "#2563eb",
+                    opacity: 0.6,
+                    border: "2px solid white",
+                    borderRadius: "50%",
+                  }}
+                />
+              );
+            })}
 
-                  width: 16,
-                  height: 16,
-                  background: "#2563eb",
-                  opacity: 0.6,
-                  border: "2px solid white",
-                  borderRadius: "50%",
-                }}
-              />
-            );
-          })}
+            <div className="lg:max-w-3xl max-w-2xl mx-auto">
+            {messages.map((msg, index) => (
+              <div
+                key={msg.id}
+                id={msg.id}
+                className={`msg-container not-branchable group flex flex-col select-text ${msg.role === "user" ? "items-end group/tools !mt-4" : "items-start !m-0"
+                  }`}
+              >
+                {/* Message Bubble */}
 
-          {messages.map((msg, index) => (
-            <div
-              key={msg.id}
-              id={msg.id}
-              className={`msg-container not-branchable group flex flex-col select-text ${msg.role === "user" ? "items-end group/tools !mt-4" : "items-start !m-0"
-                }`}
-            >
-              {/* Message Bubble */}
-              {
-                index === messages.length - 1 ? (
-                  <StreamResponse message={msg} bottomRef={bottomRef} setScrollToBottomVisible={setScrollToBottomVisible} />
-                ) : (
-                  <div
-                    className={`px-3 py-2 rounded-lg text-sm
-                      not-branchable
-                      prose prose-sm
-                      max-w-[100%] break-words
-                      prose-pre:bg-[#1d1f24]
-                      prose-pre:text-gray-200
-                      prose-pre:border
-                      prose-pre:border-gray-700
-                      prose-pre:rounded-lg
-                      prose-pre:p-4
-                      prose-pre:overflow-x-auto
-                      ${msg.role === "user"
-                        ? "bg-neutral-800 text-white"
-                        : "text-gray-800 pt-0 px-1.5"
-                      }
-      `}
-                    dangerouslySetInnerHTML={{ __html: msg.content }}
-                  />
-                )
-              }
+                <StreamResponse isLast={index === messages.length - 1 && !toolState.branch} message={msg} bottomRef={bottomRef} setScrollToBottomVisible={setScrollToBottomVisible} updateNodeInternals={updateNodeInternals} />
 
-
-
-              {/* Action Row */}
-              <div className={`
+                {/* Action Row */}
+                <div className={`
                 flex gap-2 mt-1
                 text-gray-400
 
@@ -562,66 +613,67 @@ const ChatNode = ({ id, data, selected }) => {
                 group-hover/tools:opacity-100
               `}>
 
-                {msg.role === "user" ? (
-                  <>
-                    <button
-                      onClick={(e) => handleEdit(e, msg)}
-                      className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
-                      title="Edit"
-                    >
-                      <FiEdit2 size={16} />
-                    </button>
+                  {msg.role === "user" ? (
+                    <>
+                      <button
+                        onClick={(e) => handleEdit(e, msg)}
+                        className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
+                        title="Edit"
+                      >
+                        <FiEdit2 size={16} />
+                      </button>
 
-                    <button
-                      onClick={() => handleCopy(msg.content)}
-                      className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
-                      title="Copy"
-                    >
-                      <FiCopy size={16} />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => handleCopy(msg.content)}
-                      className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
-                      title="Copy"
-                    >
-                      <FiCopy size={16} />
-                    </button>
+                      <button
+                        onClick={() => handleCopy(msg.content)}
+                        className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
+                        title="Copy"
+                      >
+                        <FiCopy size={16} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleCopy(msg.content)}
+                        className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
+                        title="Copy"
+                      >
+                        <FiCopy size={16} />
+                      </button>
 
-                    <button
-                      onClick={() => handleRegenerate()}
-                      className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
-                      title="Regenerate"
-                    >
-                      <FiRefreshCw size={16} />
-                    </button>
+                      <button
+                        onClick={() => handleRegenerate()}
+                        className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
+                        title="Regenerate"
+                      >
+                        <FiRefreshCw size={16} />
+                      </button>
 
-                    {/* <button
+                      {/* <button
                       onClick={() => handleReadAloud(msg.content)}
                       className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
                       title="Read aloud"
                     >
                       <FiVolume2 size={18} />
                     </button> */}
-                  </>
-                )}
+                    </>
+                  )}
+                </div>
               </div>
+            ))}
             </div>
-          ))}
 
-          {loading && (
-            <div className="bg-gray-100 text-gray-500 px-3 py-2 rounded-2xl text-sm animate-pulse">
-              Thinking...
-            </div>
-          )}
+            {loading && (
+              <div className="bg-gray-100 text-gray-500 px-3 py-2 rounded-2xl text-sm animate-pulse">
+                Thinking...
+              </div>
+            )}
 
-          {/* branch element button */}
-          {toolState.branch && messages.length > 0 && (
-            <button
-              ref={branchButtonRef}
-              className="absolute right-1 top-1 -translate-y-1/2 w-9 h-9
+            {/* branch element button */}
+            {toolState.branch && messages.length > 0 && (
+              <button
+                ref={branchButtonRef}
+                className="absolute right-1 top-1 -translate-y-1/2 w-9 h-9
             rounded-full bg-blue-500 hover:bg-blue-600 text-white flex items-center justify-center shadow-lg
 
             scale-0 opacity-0
@@ -629,84 +681,94 @@ const ChatNode = ({ id, data, selected }) => {
             group-hover/branch:scale-100
             transition-all duration-150
             "
-            >
-              <FiGitBranch size={20} />
-            </button>
-          )}
-          <div ref={bottomRef} />
-        </div>
-      )}
+              >
+                <FiGitBranch size={20} />
+              </button>
+            )}
+            <div ref={bottomRef} />
+          </div>
+        )}
 
-      {/* FOOTER */}
-      {!collapsed && (
-        <div
-          className={`
-            w-full bg-gray-100 p-3
-            flex items-center gap-2 transition-all duration-200 z-10 cursor-default
-            ${isVisible
-              ? "py-2 opacity-100 nodrag"
-              : "py-0 h-0 opacity-0 group-hover:py-2 group-hover:h-auto group-hover:opacity-100"
-            }
-          `}
-        >
-          <button className="text-gray-500 hover:text-black">
-            <FiMic size={16} />
-          </button>
-
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend(undefined)}
-            placeholder="Type a message..."
-            className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
-          />
-
-          <button
-            onClick={() => handleSend(undefined)}
-            disabled={!input.trim() || loading}
-            className="px-3 py-2 rounded-lg bg-blue-500 text-white text-xs hover:bg-blue-600 disabled:opacity-40 transition"
-          >
-            <FiSend />
-          </button>
-        </div>
-      )}
-
-      {/* scroll to bottom button  */}
-      {
-        !collapsed && (
-          <button className={`
-            absolute bottom-14 bg-gray-200 p-3 rounded-full left-1/2 translate-x-[-50%] shadow-xl hover:bg-gray-300 transition-all duration-200 ${scrollToBottomVisible ? "opacity-1" : "opacity-0"}
-            `} onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}>
-            <FiArrowDown size={20} />
-          </button>
-        )
-      }
-
-      {/* Branch Node Button */}
-      <div className="absolute bottom-0 left-0 w-full h-2 cursor-crosshair group/branch">
-
-        <div className="absolute bottom-0 left-0 w-full h-full z-20" />
-
-        <div className="absolute bottom-0 left-0 w-full flex justify-center pointer-events-none">
-          <button
-            onClick={() => data.onAddChild?.(id)}
+        {/* FOOTER */}
+        {!collapsed && (
+          <div
             className={`
+            w-full bg-gray-50 p-3
+            flex items-center gap-2 transition-all duration-200 z-10 cursor-default nodrag nopan
+            ${isVisible
+                ? "py-2 opacity-100"
+                : isFocused ? "!bg-transparent" : "py-0 h-0 opacity-0 group-hover:py-2 group-hover:h-auto group-hover:opacity-100"
+              }
+
+            ${isFocused && "!bg-gray-50 rounded-full pl-4 mb-3 lg:max-w-3xl max-w-2xl m-auto"}
+          `}
+          >
+            <button className="p-1 text-gray-600 hover:text-black">
+              <FiMic size={22} />
+            </button>
+
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSend(undefined)}
+              placeholder="Type a message..."
+              className={`flex-1 px-3 py-2 rounded-full border border-gray-300 focus:outline-none
+              ${isFocused && "bg-transparent border-0 px-1"}`}
+            />
+
+            <button
+              onClick={() => handleSend(undefined)}
+              disabled={!input.trim() || loading}
+              className="p-2.5 rounded-full bg-blue-500 text-white text-xs hover:bg-blue-600 disabled:opacity-40 transition"
+            >
+              <FiSend size={22} />
+            </button>
+          </div>
+        )}
+
+        {/* scroll to bottom button  */}
+        {
+          !collapsed && (
+            <button className={`
+            absolute bg-gray-200 p-3 rounded-full left-1/2 translate-x-[-50%] shadow-3xl hover:bg-gray-300 transition-all duration-200
+            ${scrollToBottomVisible ? "opacity-1" : "opacity-0"}
+
+            ${(isVisible && !isFocused) ? "bottom-16" : "bottom-4"}
+
+            ${isFocused ? "bottom-[5rem] bg-gray-50" : "group-hover:bottom-16"}
+            
+            `} onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}>
+              <FiArrowDown size={20} />
+            </button>
+          )
+        }
+
+        {/* Branch Node Button */}
+        <div className="absolute bottom-0 left-0 w-full h-2 cursor-crosshair group/branch">
+
+          <div className="absolute bottom-0 left-0 w-full h-full z-20" />
+
+          <div className="absolute bottom-0 left-0 w-full flex justify-center pointer-events-none">
+            <button
+              onClick={() => data.onAddChild?.(id)}
+              className={`
             mb-[-16px] bg-white border border-gray-300 shadow-md rounded-full opacity-0 scale-90 p-2
             transition-all duration-200 z-20 hover:bg-black hover:text-white
             group-hover/branch:opacity-100 
             group-hover/branch:scale-100
             pointer-events-auto
             `}
-          >
-            <FiGitBranch size={16} />
-          </button>
+            >
+              <FiGitBranch size={16} />
+            </button>
+          </div>
+
         </div>
 
+        <Handle type="source" position={Position.Bottom} />
       </div>
-
-      <Handle type="source" position={Position.Bottom} />
-    </div>
+    </>
   );
 };
 
-export default ChatNode;
+export default React.memo(ChatNode);

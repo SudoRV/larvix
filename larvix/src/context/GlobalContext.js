@@ -5,6 +5,7 @@ const GlobalContext = createContext();
 export function GlobalProvider({ children }) {
     // Tool states
     const [toolState, setToolState] = useState({
+        home: {state: false, activeNode: null, message: false, description: false},
         branch: false,
         voice: false,
         comment: false,

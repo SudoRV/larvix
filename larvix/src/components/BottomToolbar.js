@@ -40,21 +40,45 @@ export default function BottomToolbar() {
   };
 
   const toggleStyle = (isActive) =>
-    `p-2 rounded-lg transition-all ${
-      isActive
-        ? "bg-[#4a4a4a] shadow-inner scale-95"
-        : "hover:bg-[#4a4a4a]"
+    `p-2 rounded-lg transition-all ${isActive
+      ? "bg-[#4a4a4a] shadow-inner scale-95"
+      : "hover:bg-[#3a3a3a]"
     }`;
 
-  return (
-    <div className="absolute w-full bottom-2 flex items-center justify-center">
+  
+    const isFocused = toolState.home.activeNode !== null;
 
-      <div className="flex items-center gap-4 bg-[#1E1E1E] px-4 py-1 rounded-xl shadow-2xl text-white">
+  return (
+    <div className={`absolute bottom-2 flex items-center justify-center
+    ${isFocused ? "w-fit right-2" : "w-full"}
+    `}>
+
+      <div className={`relative flex items-center gap-4 bg-[#1E1E1E] px-4 py-2 rounded-xl shadow-2xl text-white transition-all duration-300
+        ${isFocused ? "ml-auto mr-2 w-[4rem]" : ""}`}>
 
         {/* Home (stateless action) */}
+        <div className={`absolute p-3 bg-transparent border border-dashed border-neutral-700 rounded-lg text-sm text-neutral-900 top-[-60px] left-4 transition-all duration-300 flex gap-2 select-none ${toolState.home.message ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
+          {toolState.home.description && (
+            <p className="absolute -top-16 left-0">Selecting a node will open it in the full canvas as a standalone chat.</p>
+          )}
+
+          <p>Select Node to focus on!</p>
+
+          <span className="w-5 h-5 flex justify-center items-center border border-neutral-700 rounded-full text-xs italic font-bold cursor-pointer hover:bg-neutral-50"
+            onClick={() => setToolState(prev => ({
+              ...prev,
+              home: { ...toolState.home, description: !toolState.home.description }
+            }))} >i</span>
+        </div>
+
         <button
-          onClick={() => console.log("Home clicked")}
-          className="p-2 rounded-lg hover:bg-[#4a4a4a]"
+          onClick={() => {
+            setToolState(prev => ({
+              ...prev,
+              home: { ...toolState.home, state: !toolState.home.state, activeNode: null, message: isFocused ? false : !toolState.home.message }
+            }))
+          }}
+          className={toggleStyle(toolState.home.state)}
         >
           <FiHome size={18} />
         </button>

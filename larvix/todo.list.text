@@ -1,0 +1,1 @@
+on edit message ( user ) delete all nodes ( branches ) which are connected to deleting messages ( agent )
