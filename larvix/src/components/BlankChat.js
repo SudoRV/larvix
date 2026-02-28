@@ -4,7 +4,7 @@ export default function BlankPage({ messages, setInput }) {
             {messages.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-[96%] text-center space-y-4 text-gray-500 not-branchable">
 
-                    <p className="text-sm font-medium text-gray-600 not-branchable">
+                    <p className="font-medium text-gray-600 not-branchable">
                         Start a conversation
                     </p>
 
@@ -20,7 +20,7 @@ export default function BlankPage({ messages, setInput }) {
                                 key={item}
                                 onClick={() => setInput(item)}
                                 className="
-            px-4 py-2 text-xs rounded-full
+            px-4 py-2 text-sm rounded-full
             bg-white border border-gray-300
             hover:bg-black hover:text-white
             transition not-branchable

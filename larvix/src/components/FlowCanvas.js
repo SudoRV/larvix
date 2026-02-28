@@ -31,7 +31,7 @@ export default function FlowCanvas() {
         {
             id: crypto.randomUUID(),
             type: "chat",
-            position: { x: 400, y: 100 },
+            position: { x: 100, y: 100 },
             data: { label: "Root message" },
         }
     ];
@@ -45,7 +45,7 @@ export default function FlowCanvas() {
     /* ✅ Run only once safely after mount */
     useEffect(() => {
         const timer = setTimeout(() => {
-            fitView({ padding: 0.6 });
+            fitView({ padding: window.innerWidth > 1000 ? 3.8 : 1.4 });
         }, 0);
 
         return () => clearTimeout(timer);
@@ -59,10 +59,39 @@ export default function FlowCanvas() {
 
     const addChild = useCallback(
         (parentId, newHandle, handlePosition, context, messageId) => {
-            const newId = crypto.randomUUID();
             const parentNode = nodes.find((n) => n.id === parentId);
             if (!parentNode) return;
+            const newId = crypto.randomUUID();
 
+            if(!handlePosition || !context || !messageId){
+                // New Node
+                const newNode = {
+                    id: newId,
+                    type: "chat",
+                    position: {
+                        x: parentNode.position.x,
+                        y: parentNode.position.y + parentNode.height + 100 
+                    },
+                    data: { label: "Node", context: context, messageId }
+                };
+    
+                setNodes((nds) => [...nds, newNode]);
+
+                const newEdge = {
+                    id: `e${parentId}-${newHandle.id}-${newId}`,
+                    source: parentId,
+                    sourceHandle: newHandle,
+                    target: newId,
+                    animated: true,
+                    zIndex: 1000
+                }
+    
+                setEdges((eds) => [...eds, newEdge]);
+
+                return;
+            }
+
+            // New Branched Node 
             const newNode = {
                 id: newId,
                 type: "chat",
@@ -70,7 +99,7 @@ export default function FlowCanvas() {
                     x: parentNode.position.x + (handlePosition?.x || 0),
                     y: parentNode.position.y + (handlePosition?.y || 150)
                 },
-                data: { label: newHandle.id ? "Element branch" : "Node branch", context: context, messageId }
+                data: { label: "Branched Node", context: context, messageId }
             };
 
             setNodes((nds) => [...nds, newNode]);
@@ -81,14 +110,13 @@ export default function FlowCanvas() {
                 sourceHandle: newHandle.id,
                 target: newId,
                 animated: true,
-                zIndex: newHandle.id && 1000
+                zIndex: 1000
             }
 
             setEdges((eds) => [...eds, newEdge]);
 
             // create new branch handle 
             if (newHandle.id) {
-                console.log(newHandle)
                 setDynamicHandles(prev => [
                     ...prev,
                     newHandle
@@ -239,7 +267,7 @@ export default function FlowCanvas() {
 
     return (
         <div ref={reactFlowWrapper}
-            className={`w-full h-full overflow-hidden bg-gray-200`}
+            className={`w-full h-full overflow-hidden bg-neutral-800`}
         >
 
             <ReactFlow

@@ -14,9 +14,8 @@ import {
   FiVolume2,
   FiSend
 } from "react-icons/fi";
-import hljs from "highlight.js";
 
-import "highlight.js/styles/github-dark.css"; // or any theme
+
 import { useStates } from "../context/GlobalContext";
 import { astToHtml } from "./AstToHTML";
 import BlankChat from "../components/BlankChat";
@@ -143,7 +142,7 @@ const ChatNode = ({ id, data, selected }) => {
     if (!messageToSend?.trim() || loading) return;
 
     const newUserNode = {
-      timestamp: Date.now(),
+      createdAt: Date.now(),
       id: crypto.randomUUID(),
       parent: id,
       role: "user",
@@ -171,7 +170,7 @@ const ChatNode = ({ id, data, selected }) => {
       const result = await res.json();
 
       assistantNode = {
-        timestamp: Date.now(),
+        createdAt: Date.now(),
         id: crypto.randomUUID(),
         parent: id,
         role: "assistant",
@@ -181,7 +180,7 @@ const ChatNode = ({ id, data, selected }) => {
     } catch (err) {
       console.log(err)
       assistantNode = {
-        timestamp: Date.now(),
+        createdAt: Date.now(),
         id: crypto.randomUUID(),
         parent: id,
         role: "assistant",
@@ -198,7 +197,7 @@ const ChatNode = ({ id, data, selected }) => {
   const messages = useMemo(() => {
     console.log(data.ast)
     return data.ast.filter(a => a.parent === id).map(node => ({
-      timestamp: node.timestamp,
+      createdAt: node.createdAt,
       id: node.id,
       role: node.role,
       content: node.html
@@ -215,10 +214,6 @@ const ChatNode = ({ id, data, selected }) => {
     } else return
 
     // bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-
-    document.querySelectorAll("pre code").forEach((block) => {
-      hljs.highlightElement(block);
-    });
   }, [messages, loading]);
 
   //element level branching (hover)
@@ -275,7 +270,6 @@ const ChatNode = ({ id, data, selected }) => {
 
   // home button function ( make node activenode / focus node )
   useEffect(() => {
-    console.log(toolState.home.state)
     if (toolState.home.state && selected) {
       console.log("setting")
       setToolState(prev => ({
@@ -479,7 +473,7 @@ const ChatNode = ({ id, data, selected }) => {
           <Handle type="target" position={Position.Top} />
         )
       }
-      
+
       <div
         style={
           isFocused
@@ -495,7 +489,7 @@ const ChatNode = ({ id, data, selected }) => {
           }
 
       ${isFocused
-            ? "bg-transparent !rounded-none border-0 shadow-non"
+            ? "!rounded-none border-0 shadow-non"
             : "w-[460px] border border-gray-200"
           }
       
@@ -523,7 +517,7 @@ const ChatNode = ({ id, data, selected }) => {
             <select
               value={selectedApi}
               onChange={(e) => setSelectedApi(e.target.value)}
-              className="text-xs border border-gray-300 rounded px-2 py-1 bg-white outline-none cursor-pointer"
+              className="border border-gray-300 rounded px-2 py-1 bg-white outline-none cursor-pointer"
             >
               <option value="chatgpt">ChatGPT</option>
               <option value="gemini">Gemini</option>
@@ -531,17 +525,17 @@ const ChatNode = ({ id, data, selected }) => {
 
             <button
               onClick={() => setCollapsed(!collapsed)}
-              className="text-gray-500 hover:text-black"
+              className="text-gray-800 hover:text-black"
             >
-              {collapsed ? <FiChevronDown size={16} /> : <FiChevronUp size={14} />}
+              {collapsed ? <FiChevronDown size={18} /> : <FiChevronUp size={20} />}
             </button>
           </div>
 
           <button
             onClick={() => data.onDelete?.(id)}
-            className="p-1 text-gray-400 hover:text-red-500"
+            className="p-1 text-gray-800 hover:text-red-500"
           >
-            <FiX size={16} />
+            <FiX size={20} />
           </button>
         </div>
 
@@ -590,19 +584,19 @@ const ChatNode = ({ id, data, selected }) => {
             })}
 
             <div className="lg:max-w-3xl max-w-2xl mx-auto">
-            {messages.map((msg, index) => (
-              <div
-                key={msg.id}
-                id={msg.id}
-                className={`msg-container not-branchable group flex flex-col select-text ${msg.role === "user" ? "items-end group/tools !mt-4" : "items-start !m-0"
-                  }`}
-              >
-                {/* Message Bubble */}
+              {messages.map((msg, index) => (
+                <div
+                  key={msg.id}
+                  id={msg.id}
+                  className={`msg-container not-branchable group flex flex-col select-text ${msg.role === "user" ? "items-end group/tools !mt-4" : "items-start !m-0"
+                    }`}
+                >
+                  {/* Message Bubble */}
 
-                <StreamResponse isLast={index === messages.length - 1 && !toolState.branch} message={msg} bottomRef={bottomRef} setScrollToBottomVisible={setScrollToBottomVisible} updateNodeInternals={updateNodeInternals} />
+                  <StreamResponse isLast={index === messages.length - 1 && !toolState.branch} message={msg} bottomRef={bottomRef} setScrollToBottomVisible={setScrollToBottomVisible} updateNodeInternals={updateNodeInternals} />
 
-                {/* Action Row */}
-                <div className={`
+                  {/* Action Row */}
+                  <div className={`
                 flex gap-2 mt-1
                 text-gray-400
 
@@ -613,54 +607,54 @@ const ChatNode = ({ id, data, selected }) => {
                 group-hover/tools:opacity-100
               `}>
 
-                  {msg.role === "user" ? (
-                    <>
-                      <button
-                        onClick={(e) => handleEdit(e, msg)}
-                        className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
-                        title="Edit"
-                      >
-                        <FiEdit2 size={16} />
-                      </button>
+                    {msg.role === "user" ? (
+                      <>
+                        <button
+                          onClick={(e) => handleEdit(e, msg)}
+                          className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
+                          title="Edit"
+                        >
+                          <FiEdit2 size={16} />
+                        </button>
 
-                      <button
-                        onClick={() => handleCopy(msg.content)}
-                        className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
-                        title="Copy"
-                      >
-                        <FiCopy size={16} />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => handleCopy(msg.content)}
-                        className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
-                        title="Copy"
-                      >
-                        <FiCopy size={16} />
-                      </button>
+                        <button
+                          onClick={() => handleCopy(msg.content)}
+                          className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
+                          title="Copy"
+                        >
+                          <FiCopy size={16} />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleCopy(msg.content)}
+                          className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
+                          title="Copy"
+                        >
+                          <FiCopy size={16} />
+                        </button>
 
-                      <button
-                        onClick={() => handleRegenerate()}
-                        className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
-                        title="Regenerate"
-                      >
-                        <FiRefreshCw size={16} />
-                      </button>
+                        <button
+                          onClick={() => handleRegenerate()}
+                          className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
+                          title="Regenerate"
+                        >
+                          <FiRefreshCw size={16} />
+                        </button>
 
-                      {/* <button
+                        {/* <button
                       onClick={() => handleReadAloud(msg.content)}
                       className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
                       title="Read aloud"
                     >
                       <FiVolume2 size={18} />
                     </button> */}
-                    </>
-                  )}
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
             </div>
 
             {loading && (
@@ -700,10 +694,10 @@ const ChatNode = ({ id, data, selected }) => {
                 : isFocused ? "!bg-transparent" : "py-0 h-0 opacity-0 group-hover:py-2 group-hover:h-auto group-hover:opacity-100"
               }
 
-            ${isFocused && "!bg-gray-50 rounded-full pl-4 mb-3 lg:max-w-3xl max-w-2xl m-auto"}
+            ${isFocused && "!bg-neutral-700 text-white rounded-full pl-4 mb-3 lg:max-w-3xl max-w-2xl mx-auto shadow-2xl"}
           `}
           >
-            <button className="p-1 text-gray-600 hover:text-black">
+            <button className="p-1 text-inherit hover:text-black">
               <FiMic size={22} />
             </button>
 
@@ -712,7 +706,7 @@ const ChatNode = ({ id, data, selected }) => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend(undefined)}
               placeholder="Type a message..."
-              className={`flex-1 px-3 py-2 rounded-full border border-gray-300 focus:outline-none
+              className={`flex-1 px-3 py-2 rounded-full border border-gray-300 focus:outline-none text-[16px]
               ${isFocused && "bg-transparent border-0 px-1"}`}
             />
 
@@ -750,7 +744,13 @@ const ChatNode = ({ id, data, selected }) => {
 
           <div className="absolute bottom-0 left-0 w-full flex justify-center pointer-events-none">
             <button
-              onClick={() => data.onAddChild?.(id)}
+              onClick={() => data.onAddChild?.(
+                id,
+                "bottom-handle",
+                undefined,
+                undefined,
+                undefined
+              )}
               className={`
             mb-[-16px] bg-white border border-gray-300 shadow-md rounded-full opacity-0 scale-90 p-2
             transition-all duration-200 z-20 hover:bg-black hover:text-white
@@ -765,7 +765,7 @@ const ChatNode = ({ id, data, selected }) => {
 
         </div>
 
-        <Handle type="source" position={Position.Bottom} />
+        <Handle id="bottom-handle" type="source" position={Position.Bottom} />
       </div>
     </>
   );

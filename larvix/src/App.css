@@ -49,3 +49,23 @@ html, body{
 .react-flow__nodes {
   z-index: 5 !important;
 }
+
+.code-block{
+  scrollbar-width: thin;
+  scrollbar-color: #535353 #181818;
+  font-family:
+  ui-monospace,
+  SFMono-Regular,
+  Menlo,
+  Monaco,
+  Consolas,
+  "Liberation Mono",
+  "Courier New",
+  monospace;
+
+  font-size: 18px;
+}
+
+.msg-container > * {
+  font-size: 16px;
+}

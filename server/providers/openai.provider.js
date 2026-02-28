@@ -5,6 +5,100 @@ export const callOpenAI = async (message) => {
 
   if (normalized.includes("backpropagation")) {
     const markdown_response = `
+# 🧠 AI Response: Context & Artifact Awareness
+
+When processing structured input, an AI system typically extracts:
+
+- **Context**
+- **Artifacts**
+- **Intent**
+- **Code blocks**
+
+---
+
+## 🔹 One-Line Example
+
+\`\`\`js
+const context = input.split("Context:")[1];
+\`\`\`
+
+---
+
+## 🔹 Two-Line Example
+
+\`\`\`js
+const parts = input.split("Summary:");
+const summary = parts[1];
+\`\`\`
+
+---
+
+## 🔹 Multi-Line Example
+
+\`\`\`js
+function analyzeInput(input) {
+  return {
+    hasContext: input.includes("Context:"), cjnjnckxznxkvn vv vnjvjxvjxz vxzbvxzbvxk vxzbv xvbxb v b
+    hasSummary: input.includes("Summary:"),
+    hasCode: input.includes("\`\`\`"),
+  };
+}
+\`\`\`
+
+---
+
+## ✅ Processing Strategy
+
+1. Detect structural markers  
+2. Extract code blocks  
+3. Preserve important keywords  
+4. Return structured output  
+
+This demonstrates how an AI might reason about context and artifacts without implementing a full parser.
+`;
+
+    return parseMarkdownToAST(markdown_response);
+  }
+
+  const markdown_response = `
+## Demo Mode
+
+Try asking about **backpropagation** to see a structured AI-style markdown response.
+`;
+
+  return parseMarkdownToAST(markdown_response);
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const data = `
 ## Backpropagation (Backprop)
 
 Backpropagation is a supervised learning algorithm used to train artificial neural networks. It minimizes the loss function by adjusting network weights using **gradient descent** and the **chain rule of calculus**.
@@ -87,27 +181,7 @@ Backpropagation:
 - Reduces loss efficiently  
 
 It is the fundamental optimization algorithm behind deep learning.
-`;
-
-    const ast_response = parseMarkdownToAST(markdown_response);
-    return ast_response;
-  }
-
-  const markdown_response = `
-## Demo Mode
-
-This demo currently supports only:
-
-- **What is backpropagation?**
-
-Try asking that question.
-`;
-
-  const ast_response = parseMarkdownToAST(markdown_response);
-  return ast_response;
-
-}
-
+`
 
 
 

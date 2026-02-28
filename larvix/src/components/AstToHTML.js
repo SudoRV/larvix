@@ -33,7 +33,8 @@ function assignIds(node) {
     "data-node-id": node.data.nodeId,
     className: [
       ...(node.data.hProperties?.className || []),
-      isBlock ? "branchable-block" : "branchable-inline"
+      isBlock ? "branchable-block" : "branchable-inline",
+      node.lang && `language-${node.lang}`
     ]
   };
 
