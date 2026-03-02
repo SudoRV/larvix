@@ -1,27 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
-import hljs from "highlight.js/lib/core";
-
-import javascript from "highlight.js/lib/languages/javascript";
-import typescript from "highlight.js/lib/languages/typescript";
-import python from "highlight.js/lib/languages/python";
-import html from "highlight.js/lib/languages/xml";
-import css from "highlight.js/lib/languages/css";
-import json from "highlight.js/lib/languages/json";
-import bash from "highlight.js/lib/languages/bash";
-import markdown from "highlight.js/lib/languages/markdown";
-
-hljs.registerLanguage("javascript", javascript);
-hljs.registerLanguage("js", javascript);
-hljs.registerLanguage("typescript", typescript);
-hljs.registerLanguage("ts", typescript);
-hljs.registerLanguage("python", python);
-hljs.registerLanguage("html", html);
-hljs.registerLanguage("css", css);
-hljs.registerLanguage("json", json);
-hljs.registerLanguage("bash", bash);
-hljs.registerLanguage("markdown", markdown);
-
+import { normalizeLang } from "../scripts/ArtifactTypeFromLang";
+import hljs from "../scripts/SyntaxHighlighter";
 
 const StreamResponse = React.memo(function StreamResponse({ isLast, message, bottomRef, setScrollToBottomVisible, updateNodeInternals }) {
 
@@ -47,7 +27,7 @@ const StreamResponse = React.memo(function StreamResponse({ isLast, message, bot
                 const textNode = document.createTextNode("");
                 parentEl.appendChild(textNode);
 
-                if (message.role === "assistant" && Date.now() - message.createdAt < 30000) {
+                if (message.role === "assistan" && message.completed === false) {
                     for (let char of node.textContent) {
                         if (cancelled) return;
                         textNode.textContent += char;
@@ -61,8 +41,7 @@ const StreamResponse = React.memo(function StreamResponse({ isLast, message, bot
                     }
                 } else {
                     textNode.textContent = node.textContent;
-                }
-
+                }        
             } else if (node.nodeType === Node.ELEMENT_NODE) {
                 const el = document.createElement(node.tagName);
 
@@ -147,7 +126,7 @@ function enhanceCodeBlocks(container) {
         const raw_code = codeEl?.textContent || "";
 
         const lang =
-            codeEl?.className.match(/language-(\w+)/)?.[1] || "javascript";
+            normalizeLang(codeEl?.className.match(/language-(\w+)/)?.[1] || "javascript");
 
         const code_attributes = Object.values(codeEl.attributes).map(a => `${a.name}="${a.value}"`).join(" ");
 
@@ -168,7 +147,7 @@ function enhanceCodeBlocks(container) {
 
         wrapper.innerHTML = `
         <div class="flex justify-between items-center px-4 py-2 bg-neutral-800">
-          <span class="text-sm font-bold text-zinc-300 font-mono uppercase">${lang}</span>
+          <span class="text-sm font-bold text-zinc-300 font-mono">${lang}</span>
           <div class="flex gap-2">
             <button class="copy-btn text-xs px-3 py-1 bg-neutral-700 rounded text-white">Copy</button>
             <button class="edit-btn text-xs px-3 py-1 bg-indigo-600 rounded text-white invisible">Edit</button>

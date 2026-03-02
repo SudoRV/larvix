@@ -7,20 +7,21 @@ router.post("/", async (req, res) => {
   try {
     const { api, message } = req.body;
 
+    // 1️⃣ Tell client this is a stream
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    // Flush headers immediately
+    res.flushHeaders?.();
+
     if (!api || !message) {
       return res.status(400).json({
         error: "api and message are required"
       });
     }
 
-    const response = await handleAIRequest(api, message);
-
-    return res.json({
-      success: true,
-      provider: api,
-      output: response
-    });
-
+    const response = await handleAIRequest(api, message, res);
   } catch (error) {
     console.error(error);
     res.status(500).json({

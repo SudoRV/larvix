@@ -15,16 +15,16 @@ import {
   FiSend
 } from "react-icons/fi";
 
-
 import { useStates } from "../context/GlobalContext";
 import { astToHtml } from "./AstToHTML";
+import { parseMarkdownToAST } from "../scripts/markdownParser";
 import BlankChat from "../components/BlankChat";
 import StreamResponse from "../components/StreamResponse";
 
 const ChatNode = ({ id, data, selected }) => {
   const [input, setInput] = useState("");
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedApi, setSelectedApi] = useState("chatgpt");
+  const [selectedApi, setSelectedApi] = useState("gemini");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
   const [scrollToBottomVisible, setScrollToBottomVisible] = useState(false);
@@ -33,6 +33,7 @@ const ChatNode = ({ id, data, selected }) => {
   const branchButtonRef = useRef(null);
   const updateNodeInternals = useUpdateNodeInternals();
   const initializedRef = useRef(false);
+  const currentMessageRef = useRef(null);
 
   const { toolState, setToolState } = useStates();
   const { getViewport } = useReactFlow();
@@ -41,6 +42,8 @@ const ChatNode = ({ id, data, selected }) => {
     width: 0,
     height: 0,
   });
+
+  const [context, setContext] = useState({});
 
   useEffect(() => {
     const canvas = document.querySelector(".react-flow");
@@ -137,6 +140,7 @@ const ChatNode = ({ id, data, selected }) => {
 
   // ai response
   const handleSend = async (overrideInput) => {
+    // user prompt
     const messageToSend = overrideInput ?? input;
 
     if (!messageToSend?.trim() || loading) return;
@@ -147,7 +151,8 @@ const ChatNode = ({ id, data, selected }) => {
       parent: id,
       role: "user",
       ast: null,
-      html: `<p>${messageToSend}</p>`
+      html: `<p>${messageToSend}</p>`,
+      completed: true
     };
 
     data.onAddAst(prev => [...prev, newUserNode]);
@@ -157,26 +162,102 @@ const ChatNode = ({ id, data, selected }) => {
 
     let assistantNode;
 
+    // api call
     try {
-      const res = await fetch("http://localhost:8000/api/ai", {
+      const response = await fetch("http://localhost:8000/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           api: selectedApi,
-          message: messageToSend
+          message: messageToSend,
+          chat_id: null,
+          node_id: id,
         })
       });
 
-      const result = await res.json();
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
 
-      assistantNode = {
-        createdAt: Date.now(),
-        id: crypto.randomUUID(),
-        parent: id,
-        role: "assistant",
-        ast: result.output,
-        html: await astToHtml(result.output)
-      };
+      let textBuffer = "";      // Accumulate markdown content
+      let sseBuffer = "";       // Accumulate raw SSE bytes
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        sseBuffer += decoder.decode(value, { stream: true });
+
+        // Split complete SSE messages
+        const messages = sseBuffer.split("\n\n");
+        sseBuffer = messages.pop(); // keep incomplete message
+
+        for (const msg of messages) {
+          if (!msg.startsWith("data: ")) continue;
+
+          const jsonStr = msg.slice(6).trim();
+
+          if (jsonStr === "[DONE]") {
+            return;
+          }
+
+          let stream;
+          try {
+            stream = JSON.parse(jsonStr);
+          } catch (err) {
+            console.error("Invalid JSON chunk:", jsonStr);
+            continue;
+          }
+
+          if(stream.type === "final") console.log(stream.content)
+
+          // Accumulate only for chunk type
+          if (stream.type === "chunk") {
+            textBuffer += stream.content;
+          }
+
+          const markdownSource =
+            stream.type === "chunk" ? textBuffer : stream.content;
+
+          const updatedAst = parseMarkdownToAST(markdownSource);
+          const updatedHtml = await astToHtml(updatedAst);
+
+          data.onAddAst(prev => {
+            if (!prev.length) return prev;
+
+            const lastIndex = prev.length - 1;
+            const lastNode = prev[lastIndex];
+
+            // Update existing incomplete node
+            if (!lastNode.completed) {
+              const updatedNode = {
+                ...lastNode,
+                ast: updatedAst,
+                html: updatedHtml,
+                completed: stream.type === "final"
+              };
+
+              return [
+                ...prev.slice(0, lastIndex),
+                updatedNode
+              ];
+            }
+
+            // Create new node only if previous is completed
+            const assistantNode = {
+              createdAt: Date.now(),
+              id: crypto.randomUUID(),
+              parent: id,
+              role: "assistant",
+              ast: updatedAst,
+              html: updatedHtml,
+              completed: false
+            };
+
+            setLoading(false);
+            return [...prev, assistantNode];
+          });
+        }
+      }
     } catch (err) {
       console.log(err)
       assistantNode = {
@@ -187,20 +268,23 @@ const ChatNode = ({ id, data, selected }) => {
         ast: null,
         html: "<p>⚠ Server error.</p>"
       };
-    }
 
-    data.onAddAst(prev => [...prev, assistantNode]);
-    setLoading(false);
+      data.onAddAst(prev => [...prev, assistantNode]);
+      setLoading(false);
+    }
   };
 
   // update messages after ast updation
   const messages = useMemo(() => {
-    console.log(data.ast)
+    // console.log(data.ast)
     return data.ast.filter(a => a.parent === id).map(node => ({
       createdAt: node.createdAt,
       id: node.id,
       role: node.role,
-      content: node.html
+      oldLength: node.oldLength,
+      buffer: node.buffer,
+      content: node.html,
+      completed: node.completed
     }));
   }, [data.ast, id]);
 
@@ -592,6 +676,28 @@ const ChatNode = ({ id, data, selected }) => {
                     }`}
                 >
                   {/* Message Bubble */}
+
+                  {/* <div
+                    ref={currentMessageRef}
+                    className={`px-3 py-2 rounded-lg text-sm
+                      not-branchable
+                      prose prose-sm
+                      max-w-[100%] break-words
+                      prose-pre:bg-[#1d1f24]
+                      prose-pre:text-gray-200
+                      prose-pre:border
+                      prose-pre:border-gray-700
+                      prose-pre:rounded-lg
+                      prose-pre:p-4
+                      prose-pre:overflow-x-auto
+                      ${msg.role === "user"
+                        ? "bg-neutral-800 text-white"
+                        : "text-gray-800 pt-0 px-1.5 w-full"
+                      }
+                  `}
+                    dangerouslySetInnerHTML={{ __html: msg.content }}
+                  /> */}
+
 
                   <StreamResponse isLast={index === messages.length - 1 && !toolState.branch} message={msg} bottomRef={bottomRef} setScrollToBottomVisible={setScrollToBottomVisible} updateNodeInternals={updateNodeInternals} />
 

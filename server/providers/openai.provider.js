@@ -1,4 +1,4 @@
-import { parseMarkdownToAST } from "../services/markdownParser.js";
+import { parseMarkdownToAST } from "../../larvix/src/scripts/markdownParser.js";
 
 export const callOpenAI = async (message) => {
   const normalized = message.toLowerCase().trim();
@@ -57,7 +57,7 @@ function analyzeInput(input) {
 This demonstrates how an AI might reason about context and artifacts without implementing a full parser.
 `;
 
-    return parseMarkdownToAST(markdown_response);
+    return markdown_response;
   }
 
   const markdown_response = `
@@ -66,7 +66,7 @@ This demonstrates how an AI might reason about context and artifacts without imp
 Try asking about **backpropagation** to see a structured AI-style markdown response.
 `;
 
-  return parseMarkdownToAST(markdown_response);
+  return markdown_response;
 };
 
 
