@@ -50,9 +50,10 @@ html, body{
   z-index: 5 !important;
 }
 
-.code-block{
+.pre-code-block, .code-block{
+  overflow: auto;
   scrollbar-width: thin;
-  scrollbar-color: #535353 #181818;
+  scrollbar-color: #bebebe #181818;
   font-family:
   ui-monospace,
   SFMono-Regular,
@@ -62,10 +63,100 @@ html, body{
   "Liberation Mono",
   "Courier New",
   monospace;
+  color: white !important;
+}
 
-  font-size: 18px;
+.pre-code-block::-webkit-scrollbar-thumb:hover, .code-block::-webkit-scrollbar-thumb:hover{
+  background: white;
 }
 
 .msg-container > * {
-  font-size: 16px;
+  font-size: 18px;
+}
+
+.markdown-body {
+  font-size: 18px;        
+  line-height: 1.6;
+  /* color: #e6e6e6; */
+  word-break: break-word;
+}
+
+/* Headings */
+
+.markdown-body h1 {
+  font-size: 2rem;
+  margin: 24px 0 16px;
+}
+
+.markdown-body h2 {
+  font-size: 1.6rem;
+  margin: 22px 0 14px;
+}
+
+.markdown-body h3 {
+  font-size: 1.3rem;
+  margin: 20px 0 12px;
+}
+
+/* Paragraph spacing */
+
+.markdown-body p {
+  margin: 12px 0;
+}
+
+/* Lists indentation */
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 24px;
+  margin: 10px 0;
+}
+
+.markdown-body li {
+  margin: 6px 0;
+}
+
+/* Code blocks */
+
+/* .markdown-body pre {
+  background: #1e1e1e;
+  padding: 0 14px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 14px 0;
+} */
+
+/* .markdown-body code {
+  font-family: monospace;
+  font-size: 1.4em;
+  color: white;
+} */
+
+/* Inline code */
+
+/* .markdown-body p code {
+  background: #1e1e1e;
+  padding: 3px 6px;
+  border-radius: 4px;
+}  */
+
+/* Images */
+
+.markdown-body img {
+  max-width: 75%;
+  border-radius: 16px;
+  margin: 12px 4px;
+}
+
+/* Tables */
+
+.markdown-body table {
+  border-collapse: collapse;
+  margin: 12px 0;
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid #444;
+  padding: 8px;
 }

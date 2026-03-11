@@ -18,13 +18,15 @@ import {
 import { useStates } from "../context/GlobalContext";
 import { astToHtml } from "./AstToHTML";
 import { parseMarkdownToAST } from "../scripts/markdownParser";
+import MarkdownRenderer from "./ui/ReactMarkdown";
 import BlankChat from "../components/BlankChat";
 import StreamResponse from "../components/StreamResponse";
+import RenderMessageHTML from "./ui/RenderMessageHTML";
 
 const ChatNode = ({ id, data, selected }) => {
   const [input, setInput] = useState("");
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedApi, setSelectedApi] = useState("gemini");
+  const [selectedApi, setSelectedApi] = useState("chatgpt");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
   const [scrollToBottomVisible, setScrollToBottomVisible] = useState(false);
@@ -33,7 +35,10 @@ const ChatNode = ({ id, data, selected }) => {
   const branchButtonRef = useRef(null);
   const updateNodeInternals = useUpdateNodeInternals();
   const initializedRef = useRef(false);
-  const currentMessageRef = useRef(null);
+  const [markdownMessages, setMarkdownMessages] = useState([]);
+
+  const [streamingBuffer, setStramingBuffer] = useState("");
+  const autoScroll = useRef(true);
 
   const { toolState, setToolState } = useStates();
   const { getViewport } = useReactFlow();
@@ -42,8 +47,6 @@ const ChatNode = ({ id, data, selected }) => {
     width: 0,
     height: 0,
   });
-
-  const [context, setContext] = useState({});
 
   useEffect(() => {
     const canvas = document.querySelector(".react-flow");
@@ -78,6 +81,31 @@ const ChatNode = ({ id, data, selected }) => {
 
     return () => resizeObserver.disconnect();
   }, []);
+
+
+  useEffect(() => {
+    // check for wheen up
+    function handleAutoScroll() {
+      const container = bottomRef.current.parentElement;
+
+      const isNearBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight < 40;
+
+      if (!isNearBottom) {
+        autoScroll.current = false;
+        setScrollToBottomVisible(true);
+      } else {
+        autoScroll.current = true;
+        setScrollToBottomVisible(false);
+      }
+    }
+
+    bottomRef.current.parentElement.addEventListener("scroll", handleAutoScroll)
+
+    return () => {
+      bottomRef.current?.parentElement.removeEventListener("scroll", handleAutoScroll);
+    };
+  })
 
   // set context if element branched
   useEffect(() => {
@@ -145,22 +173,23 @@ const ChatNode = ({ id, data, selected }) => {
 
     if (!messageToSend?.trim() || loading) return;
 
-    const newUserNode = {
-      createdAt: Date.now(),
-      id: crypto.randomUUID(),
-      parent: id,
-      role: "user",
-      ast: null,
-      html: `<p>${messageToSend}</p>`,
-      completed: true
-    };
+    // const newUserNode = {
+    //   createdAt: Date.now(),
+    //   id: crypto.randomUUID(),
+    //   parent: id,
+    //   role: "user",
+    //   ast: null,
+    //   html: `<p>${messageToSend}</p>`,
+    //   completed: true
+    // };
 
-    data.onAddAst(prev => [...prev, newUserNode]);
+    // data.onAddAst(prev => [...prev, newUserNode]);
+
+    // create user message bubble 
+    addMessage(messageToSend, "user");
 
     setInput("");
     setLoading(true);
-
-    let assistantNode;
 
     // api call
     try {
@@ -178,8 +207,9 @@ const ChatNode = ({ id, data, selected }) => {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
-      let textBuffer = "";      // Accumulate markdown content
-      let sseBuffer = "";       // Accumulate raw SSE bytes
+      let textBuffer = "";
+      let sseBuffer = "";
+      let assistantMessageBubble;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -188,13 +218,13 @@ const ChatNode = ({ id, data, selected }) => {
         sseBuffer += decoder.decode(value, { stream: true });
 
         // Split complete SSE messages
-        const messages = sseBuffer.split("\n\n");
-        sseBuffer = messages.pop(); // keep incomplete message
+        const chunks = sseBuffer.split("\n\n");
+        sseBuffer = chunks.pop(); // keep incomplete message
 
-        for (const msg of messages) {
-          if (!msg.startsWith("data: ")) continue;
+        for (const chunk of chunks) {
+          if (!chunk.startsWith("data: ")) continue;
 
-          const jsonStr = msg.slice(6).trim();
+          const jsonStr = chunk.slice(6).trim();
 
           if (jsonStr === "[DONE]") {
             return;
@@ -208,89 +238,137 @@ const ChatNode = ({ id, data, selected }) => {
             continue;
           }
 
-          if(stream.type === "final") console.log(stream.content)
-
           // Accumulate only for chunk type
           if (stream.type === "chunk") {
             textBuffer += stream.content;
+            setStramingBuffer(prev => prev + stream.content);
           }
 
-          const markdownSource =
-            stream.type === "chunk" ? textBuffer : stream.content;
-
-          const updatedAst = parseMarkdownToAST(markdownSource);
-          const updatedHtml = await astToHtml(updatedAst);
-
-          data.onAddAst(prev => {
-            if (!prev.length) return prev;
-
-            const lastIndex = prev.length - 1;
-            const lastNode = prev[lastIndex];
-
-            // Update existing incomplete node
-            if (!lastNode.completed) {
-              const updatedNode = {
-                ...lastNode,
-                ast: updatedAst,
-                html: updatedHtml,
-                completed: stream.type === "final"
-              };
-
-              return [
-                ...prev.slice(0, lastIndex),
-                updatedNode
-              ];
-            }
-
-            // Create new node only if previous is completed
-            const assistantNode = {
-              createdAt: Date.now(),
-              id: crypto.randomUUID(),
-              parent: id,
-              role: "assistant",
-              ast: updatedAst,
-              html: updatedHtml,
-              completed: false
-            };
-
+          if (stream.index === 0) {
+            assistantMessageBubble = addMessage(undefined, "assistant");
             setLoading(false);
-            return [...prev, assistantNode];
-          });
+          }
+
+          if (stream.type === "final") {
+            setStramingBuffer("");
+
+            await waitForTypingToFinish();
+
+            setMarkdownMessages(prev =>
+              prev.map(msg =>
+                msg.id === assistantMessageBubble.id
+                  ? { ...msg, typingContent: null, content: stream.content, streamed: true, updateValidated: false }
+                  : msg
+              )
+            );
+          }
         }
       }
     } catch (err) {
       console.log(err)
-      assistantNode = {
-        createdAt: Date.now(),
-        id: crypto.randomUUID(),
-        parent: id,
-        role: "assistant",
-        ast: null,
-        html: "<p>⚠ Server error.</p>"
-      };
+      // assistantNode = {
+      //   createdAt: Date.now(),
+      //   id: crypto.randomUUID(),
+      //   parent: id,
+      //   role: "assistant",
+      //   ast: null,
+      //   html: "<p>⚠ Server error.</p>"
+      // };
 
-      data.onAddAst(prev => [...prev, assistantNode]);
+      // data.onAddAst(prev => [...prev, assistantNode]);
+
+      addMessage("⚠ Server error.", "assistant");
       setLoading(false);
     }
   };
 
-  // update messages after ast updation
-  const messages = useMemo(() => {
-    // console.log(data.ast)
-    return data.ast.filter(a => a.parent === id).map(node => ({
-      createdAt: node.createdAt,
-      id: node.id,
-      role: node.role,
-      oldLength: node.oldLength,
-      buffer: node.buffer,
-      content: node.html,
-      completed: node.completed
-    }));
-  }, [data.ast, id]);
+  // simulate typing effect
+  const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
-  // smooth scroll when message added and code highlighting
+  const waitForTypingToFinish = async () => {
+    await sleep(2000);
+    while (isTyping.current || typingQueue.current.length > 0) {
+      await sleep(20);
+    }
+  };
+
+  const typingQueue = useRef([]);
+  const isTyping = useRef(false);
+
   useEffect(() => {
-    const newUserMessage = messages[messages.length - 1];
+    if (!streamingBuffer) return;
+
+    typingQueue.current.push(...streamingBuffer.split(" "));
+    setStramingBuffer("");
+
+    if (!isTyping.current) {
+      startTyping()
+    }
+  }, [streamingBuffer]);
+
+  async function startTyping() {
+
+    if (isTyping.current) return;
+    isTyping.current = true;
+
+    while (typingQueue.current.length > 0) {
+
+      const queueSize = typingQueue.current.length;
+
+      let output = "";
+
+      // decide typing granularity
+      if (queueSize > 300) {
+        // very long → multiple chars
+        const chunk = typingQueue.current.splice(0, 12);
+        output = chunk.join(" ");
+      }
+      else if (queueSize > 120) {
+        // medium → single char
+        const chunk = typingQueue.current.splice(0, 6);
+        output = chunk.join(" ");
+      }
+      else {
+        // small → word
+        const word = typingQueue.current.shift();
+        output = word + " ";
+      }
+
+      const assistantId = markdownMessages.find(mm => !mm.streamed).id;
+
+      setMarkdownMessages(prev =>
+        prev.map(msg =>
+          msg.id === assistantId
+            ? { ...msg, typingContent: (msg.typingContent || "") + output }
+            : msg
+        )
+      );
+
+      if (autoScroll.current) {
+        bottomRef.current.scrollIntoView({ behavior: "smooth" });
+        updateNodeInternals()
+      }
+
+      const min = 4;
+      const max = 80;
+      const delay = Math.max(min, max - queueSize * 2);
+
+      await sleep(delay);
+    }
+
+    isTyping.current = false;
+  }
+
+  // update ast
+  function updateAst(){
+    const updatedMessages = markdownMessages.filter(mm => mm.updateValidated === false && mm.streamed === true);
+
+    
+  }
+
+  // smooth scroll when message added
+  useEffect(() => {
+    const newUserMessage = markdownMessages[markdownMessages.length - 1];
     const newUserMessageElement = newUserMessage ? document.getElementById(newUserMessage.id) : undefined;
 
     if (newUserMessageElement && newUserMessage.role === "user") {
@@ -298,7 +376,7 @@ const ChatNode = ({ id, data, selected }) => {
     } else return
 
     // bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [markdownMessages, loading]);
 
   //element level branching (hover)
   useEffect(() => {
@@ -309,12 +387,12 @@ const ChatNode = ({ id, data, selected }) => {
 
       const el = document.elementFromPoint(e.clientX, e.clientY);
 
+      if (e.ctrlKey) return;
+
       // Remove style from previous element
       if (prevEl && prevEl !== el) {
         prevEl.classList.remove("bg-blue-100", "text-black", "w-fit");
       }
-
-      if (e.ctrlKey) return;
 
       // Add style to new element
       if (el && !el.classList.contains("not-branchable")) {
@@ -325,17 +403,15 @@ const ChatNode = ({ id, data, selected }) => {
         const node_rect = nodeRef.current.getBoundingClientRect();
         const viewport = getViewport();
 
-        const x =
-          (el_rect.left - node_rect.left + el_rect.width) / viewport.zoom + 10;
+        const x = (e.clientX - chatRef.current.getBoundingClientRect().left) / viewport.zoom;
 
-        const y =
-          (el_rect.top - chatRef.current.getBoundingClientRect().top) / viewport.zoom + chatRef.current.scrollTop;
+        const y = (e.clientY - chatRef.current.getBoundingClientRect().top) / viewport.zoom + chatRef.current.scrollTop;
 
-        branchButtonRef.current.style.top = `${y}px`;
-        branchButtonRef.current.style.left = `${x}px`;
+        branchButtonRef.current.style.top = `${y + 30}px`;
+        branchButtonRef.current.style.left = `${x + 30}px`;
 
         branchButtonRef.current.onclick = () => {
-          createBranch(el_rect, el.innerText);
+          createBranch(el_rect, el.innerText, el);
         };
 
         prevEl = el;
@@ -355,7 +431,6 @@ const ChatNode = ({ id, data, selected }) => {
   // home button function ( make node activenode / focus node )
   useEffect(() => {
     if (toolState.home.state && selected) {
-      console.log("setting")
       setToolState(prev => ({
         ...prev,
         home: { ...toolState.home, state: true, activeNode: id }
@@ -363,24 +438,105 @@ const ChatNode = ({ id, data, selected }) => {
     }
   }, [selected]);
 
+
+  // Helper function to get all text nodes within a Range
+  function getTextNodesInRange(range) {
+    if (range.commonAncestorContainer.nodeType === Node.TEXT_NODE) {
+      return [range.commonAncestorContainer];
+    }
+
+    const textNodes = [];
+    const treeWalker = document.createTreeWalker(
+      range.commonAncestorContainer,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode: function (node) {
+          return range.intersectsNode(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        }
+      }
+    );
+
+    let currentNode;
+    while (currentNode = treeWalker.nextNode()) {
+      // Ignore empty text nodes (like whitespace between divs)
+      if (currentNode.nodeValue.trim() !== '') {
+        textNodes.push(currentNode);
+      }
+    }
+    return textNodes;
+  }
+
   // creating branch from element
-  async function createBranch(newBranchRect, context) {
+  async function createBranch(newBranchRect, context, element) {
+    const selection = window.getSelection();
+    const capturedSelectedText = selection.toString();
+
+    const uuid = crypto.randomUUID();
+
+    let textNodes = [];
+    let startNode;
+    let endNode;
+
+    if (selection.rangeCount || !selection.isCollapsed) {
+      const range = selection.getRangeAt(0);
+      // 1. Get all text nodes in the selection
+      textNodes = getTextNodesInRange(range);
+
+      if (textNodes.length !== 0) {
+        // 2. We need to split the first and last text nodes if the selection 
+        // doesn't cover the whole node.
+        startNode = textNodes[0];
+        endNode = textNodes[textNodes.length - 1];
+
+        // Case A: The selection is completely inside a SINGLE text node
+        if (startNode === endNode) {
+          // Split the end first so the start offset doesn't change!
+          if (range.endOffset < startNode.length) {
+            startNode.splitText(range.endOffset);
+          }
+          // Then split the start and update our array reference
+          if (range.startOffset > 0) {
+            textNodes[0] = startNode.splitText(range.startOffset);
+          }
+        }
+        // Case B: The selection spans MULTIPLE text nodes
+        else {
+          if (range.endContainer === endNode && range.endOffset < endNode.length) {
+            endNode.splitText(range.endOffset);
+          }
+          if (range.startContainer === startNode && range.startOffset > 0) {
+            textNodes[0] = startNode.splitText(range.startOffset);
+          }
+        }
+
+        // 3. Wrap each collected text node in its own span
+        textNodes.forEach(textNode => {
+          const span = document.createElement('span');
+          span.className = 'branched';
+          span.setAttribute('data-uid', uuid); // Use data attribute, not ID!
+
+          textNode.parentNode.insertBefore(span, textNode);
+          span.appendChild(textNode);
+        });
+      }
+    };
 
     const newBranchElt = document.elementFromPoint(newBranchRect.x, newBranchRect.y);
 
     const ast_id = newBranchElt.closest(".msg-container").id;
-    const targetNodeId = newBranchElt.getAttribute("data-node-id");
+    // const targetNodeId = newBranchElt.getAttribute("data-node-id");
 
     const chatRect = chatRef.current.getBoundingClientRect();
     const viewport = getViewport();
+    const startNodeRect = startNode?.parentElement?.getBoundingClientRect() || undefined;
 
     const relativeX =
-      (newBranchRect.left - chatRect.left + newBranchRect.width) /
+      ((startNodeRect ? startNodeRect?.left : newBranchRect.left) - chatRect.left + (startNodeRect ? startNodeRect?.width : newBranchRect.width)) /
       viewport.zoom +
       10;
 
     const relativeY =
-      (newBranchRect.top - chatRect.top - 3) / viewport.zoom +
+      ((startNodeRect ? startNodeRect?.top : newBranchRect.top) - chatRect.top) / viewport.zoom +
       chatRef.current.scrollTop;
 
     const newHandle = {
@@ -392,58 +548,30 @@ const ChatNode = ({ id, data, selected }) => {
       type: "source",
     };
 
-    // add new node 
+    const content = capturedSelectedText || context;
+
     data.onAddChild?.(
       id,
       newHandle,
-      { x: relativeX + 300, y: relativeY - chatRef.current.scrollTop - 80 },
-      context,
+      {
+        x: chatRect.right + 80,
+        y: relativeY - chatRef.current.scrollTop - 80
+      },
+      content,
       ast_id
     );
 
-    // update ast 
-    const msg_ast = data.ast.find(a => a.id === ast_id)?.ast;
+    updateNodeInternals(id);
 
-    if (!msg_ast) return;
+    // update ast to store branching data
 
-    const updatedTree = updateNodeById(
-      msg_ast,
-      targetNodeId,
-
-      (node) => {
-        const existingClasses = node.data?.hProperties?.className || [];
-
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            branchId: newHandle.id,
-            hProperties: {
-              ...(node.data?.hProperties || {}),
-              className: existingClasses.includes("branched") ? existingClasses : [...existingClasses, "branched", `branchedto-${newHandle.id}`]
-            }
-          }
-        }
-      }
-    )
-
-    const updatedHtml = await astToHtml(updatedTree);
-
-    data.onAddAst(prev =>
-      prev.map(m =>
-        m.id === ast_id ? {
-          ...m,
-          ast: updatedTree,
-          html: updatedHtml
-        } : m
-      )
-    )
-    // console.log(updatedTree, updatedHtml)
     setToolState(prev => ({
       ...prev,
       branch: false
     }))
-    updateNodeInternals(id);
+
+    // 4. Cleanup
+    selection.removeAllRanges();
   }
 
   function updateNodeById(node, nodeId, updater) {
@@ -502,8 +630,8 @@ const ChatNode = ({ id, data, selected }) => {
         msgElement.blur(); // trigger focusout
 
         if (newText) {
-          data.onAddAst(prev => prev.filter((a, index) => index < data.ast.indexOf(data.ast.find(a => a.id === msg.id))))
-          handleSend(newText);
+          // data.onAddAst(prev => prev.filter((a, index) => index < data.ast.indexOf(data.ast.find(a => a.id === msg.id))))
+          // handleSend(newText);
         }
       }
     };
@@ -522,9 +650,9 @@ const ChatNode = ({ id, data, selected }) => {
   };
 
   const handleRegenerate = () => {
-    const input = new DOMParser().parseFromString(messages[messages.length - 2].content, "text/html").body.textContent;
-    data.onAddAst(prev => prev.filter((a, index) => index < data.ast.length - 2))
-    handleSend(input.trim());
+    const input = new DOMParser().parseFromString(markdownMessages[markdownMessages.length - 2].content, "text/html").body.textContent;
+    // data.onAddAst(prev => prev.filter((a, index) => index < data.ast.length - 2))
+    // handleSend(input.trim());
   };
 
   const handleReadAloud = (html) => {
@@ -532,6 +660,26 @@ const ChatNode = ({ id, data, selected }) => {
     const utterance = new SpeechSynthesisUtterance(text);
     speechSynthesis.speak(utterance);
   };
+
+
+  function addMessage(content, role) {
+    const messageBubble = {
+      id: crypto.randomUUID(),
+      parent: id,
+      role,
+      content,
+      createdAt: Date.now(),
+      streamed: role === "user" ? true : false,
+      updateValidated: false,
+    }
+
+    setMarkdownMessages(prev => [...prev, messageBubble]);
+
+    return {
+      id: messageBubble.id,
+      role: messageBubble.role
+    }
+  }
 
   const isVisible = selected;
   const isFocused = toolState.home.activeNode === id;
@@ -567,7 +715,6 @@ const ChatNode = ({ id, data, selected }) => {
             }
             : undefined
         }
-
         className={`node group bg-gray-50 shadow-xl rounded-xl max-h-screen border border-gray-200 overflow-hidden flex flex-col justify-between
     ${collapsed ? "min-h-0" : "min-h-[80px]"
           }
@@ -584,7 +731,7 @@ const ChatNode = ({ id, data, selected }) => {
         {/* HEADER */}
         <div
           className={`
-          w-full bg-gray-50 px-3 py-2
+          w-full bg-gray-50 px-3
           flex items-center justify-between
           transition-all duration-200 z-10
           ${!collapsed && (
@@ -626,19 +773,12 @@ const ChatNode = ({ id, data, selected }) => {
         {/* CHAT */}
         {!collapsed && (
           <div
-            className={`group/branch flex-1 p-3 pt-0 space-y-3 transition-all duration-200 cursor-default min-h-0 overflow-x-hidden overflow-y-auto scroll-smooth custom-scroll not-branchable relative ${isVisible && "nodrag nopan"} ${isFocused && "nodrag nopan"}
+            className={`group/branch flex-1 p-3 !pt-0 space-y-3 pb-20 pl-5 transition-all duration-200 cursor-default min-h-0 overflow-x-hidden overflow-y-auto scroll-smooth custom-scroll not-branchable relative ${isVisible && "nodrag nopan"} ${isFocused && "nodrag nopan"}
             `}
-
-            // onWheel={(e) => {
-            //   e.stopPropagation();
-            //   const el = e.currentTarget;
-            //   el.scrollTop += e.deltaY;
-            // }}
-
             ref={chatRef}
           >
 
-            <BlankChat messages={messages} setInput={setInput} />
+            <BlankChat messages={markdownMessages} setInput={setInput} />
 
             <Handle id="dummy-init" type="source" position={Position.Left} style={{ opacity: 0, position: "absolute" }} />
 
@@ -667,39 +807,17 @@ const ChatNode = ({ id, data, selected }) => {
               );
             })}
 
+            {/* messages will appear here */}
             <div className="lg:max-w-3xl max-w-2xl mx-auto">
-              {messages.map((msg, index) => (
+              {markdownMessages.map((msg, index) => (
                 <div
                   key={msg.id}
                   id={msg.id}
-                  className={`msg-container not-branchable group flex flex-col select-text ${msg.role === "user" ? "items-end group/tools !mt-4" : "items-start !m-0"
+                  className={`msg-container w-full not-branchable group flex flex-col select-text ${msg.role === "user" ? "items-end group/tools !mt-4" : "items-start px-2"
                     }`}
                 >
                   {/* Message Bubble */}
-
-                  {/* <div
-                    ref={currentMessageRef}
-                    className={`px-3 py-2 rounded-lg text-sm
-                      not-branchable
-                      prose prose-sm
-                      max-w-[100%] break-words
-                      prose-pre:bg-[#1d1f24]
-                      prose-pre:text-gray-200
-                      prose-pre:border
-                      prose-pre:border-gray-700
-                      prose-pre:rounded-lg
-                      prose-pre:p-4
-                      prose-pre:overflow-x-auto
-                      ${msg.role === "user"
-                        ? "bg-neutral-800 text-white"
-                        : "text-gray-800 pt-0 px-1.5 w-full"
-                      }
-                  `}
-                    dangerouslySetInnerHTML={{ __html: msg.content }}
-                  /> */}
-
-
-                  <StreamResponse isLast={index === messages.length - 1 && !toolState.branch} message={msg} bottomRef={bottomRef} setScrollToBottomVisible={setScrollToBottomVisible} updateNodeInternals={updateNodeInternals} />
+                  <MarkdownRenderer content={msg.streamed ? msg.content : msg.typingContent} role={msg.role} />
 
                   {/* Action Row */}
                   <div className={`
@@ -724,7 +842,7 @@ const ChatNode = ({ id, data, selected }) => {
                         </button>
 
                         <button
-                          onClick={() => handleCopy(msg.content)}
+                          onClick={() => handleCopy(msg.raw)}
                           className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
                           title="Copy"
                         >
@@ -734,7 +852,7 @@ const ChatNode = ({ id, data, selected }) => {
                     ) : (
                       <>
                         <button
-                          onClick={() => handleCopy(msg.content)}
+                          onClick={() => handleCopy(msg.raw)}
                           className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
                           title="Copy"
                         >
@@ -770,7 +888,7 @@ const ChatNode = ({ id, data, selected }) => {
             )}
 
             {/* branch element button */}
-            {toolState.branch && messages.length > 0 && (
+            {toolState.branch && markdownMessages.length > 0 && (
               <button
                 ref={branchButtonRef}
                 className="absolute right-1 top-1 -translate-y-1/2 w-9 h-9
@@ -794,13 +912,13 @@ const ChatNode = ({ id, data, selected }) => {
           <div
             className={`
             w-full bg-gray-50 p-3
-            flex items-center gap-2 transition-all duration-200 z-10 cursor-default nodrag nopan
+            flex items-center gap-2 transition-all duration-200 cursor-default nodrag nopan
             ${isVisible
                 ? "py-2 opacity-100"
                 : isFocused ? "!bg-transparent" : "py-0 h-0 opacity-0 group-hover:py-2 group-hover:h-auto group-hover:opacity-100"
               }
 
-            ${isFocused && "!bg-neutral-700 text-white rounded-full pl-4 mb-3 lg:max-w-3xl max-w-2xl mx-auto shadow-2xl"}
+            ${isFocused && "!bg-neutral-700 text-white !rounded-full pl-4 mb-3 lg:max-w-3xl max-w-2xl mx-auto shadow-2xl fixed bottom-0 left-1/2 -translate-x-1/2 "}
           `}
           >
             <button className="p-1 text-inherit hover:text-black">

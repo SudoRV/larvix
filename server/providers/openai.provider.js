@@ -1,10 +1,8 @@
 import { parseMarkdownToAST } from "../../larvix/src/scripts/markdownParser.js";
 
-export const callOpenAI = async (message) => {
-  const normalized = message.toLowerCase().trim();
+export const callOpenAI = async (message, res) => {
 
-  if (normalized.includes("backpropagation")) {
-    const markdown_response = `
+  const markdown_response = `
 # 🧠 AI Response: Context & Artifact Awareness
 
 When processing structured input, an AI system typically extracts:
@@ -38,7 +36,7 @@ const summary = parts[1];
 \`\`\`js
 function analyzeInput(input) {
   return {
-    hasContext: input.includes("Context:"), cjnjnckxznxkvn vv vnjvjxvjxz vxzbvxzbvxk vxzbv xvbxb v b
+    hasContext: input.includes("Context:"),
     hasSummary: input.includes("Summary:"),
     hasCode: input.includes("\`\`\`"),
   };
@@ -49,27 +47,42 @@ function analyzeInput(input) {
 
 ## ✅ Processing Strategy
 
-1. Detect structural markers  
-2. Extract code blocks  
-3. Preserve important keywords  
-4. Return structured output  
+1. Detect structural markers
+2. Extract code blocks
+3. Preserve important keywords
+4. Return structured output
 
 This demonstrates how an AI might reason about context and artifacts without implementing a full parser.
 `;
 
-    return markdown_response;
+  // split into chunks (simulate AI token streaming)
+  const chunks = markdown_response.split(" ");
+
+  let index=0;
+  for (let i = 0; i < chunks.length; i++) {
+    res.write(
+      `data: ${JSON.stringify({
+        index: index++,
+        type: "chunk",
+        content: chunks[i]
+      })}\n\n`
+    );
+    await new Promise(r => setTimeout(r, 25)); // simulate streaming delay
   }
 
-  const markdown_response = `
-## Demo Mode
-
-Try asking about **backpropagation** to see a structured AI-style markdown response.
-`;
-
-  return markdown_response;
+  // Stream is finished here.
+  const full = markdown_response;
+  
+  res.write(
+    `data: ${JSON.stringify({
+      type: "final",
+      content: full
+    })}\n\n`
+  );
+  
+  res.write(`data: [DONE]\n\n`);
+  res.end();
 };
-
-
 
 
 

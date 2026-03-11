@@ -31,7 +31,7 @@ export default function FlowCanvas() {
         {
             id: crypto.randomUUID(),
             type: "chat",
-            position: { x: 100, y: 100 },
+            position: { x: 30, y: 30 },
             data: { label: "Root message" },
         }
     ];
@@ -45,7 +45,7 @@ export default function FlowCanvas() {
     /* ✅ Run only once safely after mount */
     useEffect(() => {
         const timer = setTimeout(() => {
-            fitView({ padding: window.innerWidth > 1000 ? 3.8 : 1.4 });
+            // fitView({ padding: window.innerWidth > 1000 ? 3.8 : 1.4 });
         }, 0);
 
         return () => clearTimeout(timer);
@@ -257,8 +257,10 @@ export default function FlowCanvas() {
                 ...node.data,
                 dynamicHandles,
                 onAddHandle: setDynamicHandles,
+                
                 onAddChild: addChild,
                 onDelete: deleteNode,
+
                 ast,
                 onAddAst: setAst,
             },
@@ -287,7 +289,6 @@ export default function FlowCanvas() {
 
                 preventScrolling={false}
                 fitView={false}
-                autoPanOnNodeFocus={false}
             >
                 {/* <Background gap={20} size={1} color="#444" /> */}
                 {
