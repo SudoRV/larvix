@@ -1,360 +1,348 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Larvix | AI Workspace Blog</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
-    
-    <style>
-        :root {
-            --primary: #6366f1; /* Indigo */
-            --dark: #0f172a;
-            --light-bg: #f8fafc;
-            --text-main: #1e293b;
-            --text-muted: #64748b;
-            --glass: rgba(255, 255, 255, 0.8);
-        }
-
-        * {
-            box-sizing: border-box;
-            transition: all 0.3s ease;
-        }
-        
-        html {
-            width: 100%;
-            height: 100%;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            margin: 0;
-            background-color: var(--light-bg);
-            color: var(--text-main);
-            line-height: 1.7;
-            scroll-behavior: smooth;
-            
-            width: 100%;
-            min-height: 100%;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* --- Modern Navbar --- */
-        header {
-            background: var(--glass);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1rem 10%;
-            border-bottom: 1px solid rgba(0,0,0,0.05);
-            /* Assuming header is around 65px tall */
-        }
-
-        header h1 {
-            font-weight: 800;
-            font-size: 1.5rem;
-            letter-spacing: -1px;
-            color: var(--dark);
-            margin: 0;                       
-        }
-        
-        .logo {
-            height: 65px;
-        }
-
-        nav a {
-            color: var(--text-main);
-            margin-left: 25px;
-            text-decoration: none;
-            font-weight: 500;
-            font-size: 0.95rem;
-        }
-
-        nav a:hover {
-            color: var(--primary);
-        }
-
-        /* --- Hero Section --- */
-        .hero {   
-            padding: 0px 20px;
-            text-align: center;
-            background: radial-gradient(circle at top right, #e0e7ff 0%, #f8fafc 50%);
-                      
-            flex: 1;
-            min-height: calc(100vh - 65px); 
-                                                
-            display: flex; 
-            flex-direction: column; 
-            justify-content: center;
-            align-items: center;               
-        }
-
-        .hero h2 {
-            font-size: 3.5rem;
-            font-weight: 800;
-            margin-bottom: 20px;
-            letter-spacing: -1px;
-            line-height: 1.4;
-            color: var(--dark);                  
-        }
-
-        .hero p {
-            color: var(--text-muted);
-            max-width: 650px;            
-            font-size: 1.2rem;                     
-        }
-
-        /* --- Blog Container --- */
-        .container {
-            max-width: 850px;
-            /* Reduced margin */
-            margin: 30px auto; 
-            background: white;
-            /* Reduced padding */
-            padding: 25px 30px; 
-            border-radius: 24px;
-            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
-        }
-
-        .blog-title {
-            font-size: 2.5rem;
-            font-weight: 800;
-            color: var(--dark);
-            line-height: 1.2;
-            margin-bottom: 10px;
-        }
-
-        .blog-date {
-            color: var(--primary);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-size: 0.8rem;
-            margin-bottom: 30px;
-            display: block;
-        }
-
-        h3 {
-            font-size: 1.6rem;
-            margin-top: 40px;
-            color: var(--dark);
-            border-left: 4px solid var(--primary);
-            padding-left: 15px;
-        }
-
-        ul {
-            list-style: none;
-            padding: 0;
-        }
-
-        ul li {
-            background: #f1f5f9;
-            margin-bottom: 10px;
-            padding: 12px 20px;
-            border-radius: 10px;
-            font-size: 0.95rem;
-        }
-
-        ul li b {
-            color: var(--primary);
-        }
-
-        /* --- Contact Section --- */
-        .contact {
-            background: var(--dark);
-            color: white;
-            padding: 100px 20px;
-            text-align: center;
-        }
-
-        .contact h2 {
-            font-size: 2.5rem;
-            margin-bottom: 30px;
-        }
-
-        .contact-form {
-            max-width: 500px;
-            margin: 0 auto;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .contact-form input, .contact-form textarea {
-            padding: 15px;
-            border-radius: 12px;
-            border: none;
-            background: rgba(255,255,255,0.1);
-            color: white;
-            font-family: inherit;
-        }
-
-        .contact-form input::placeholder, .contact-form textarea::placeholder {
-            color: #94a3b8;
-        }
-
-        .btn {
-            background: var(--primary);
-            color: white;
-            padding: 15px;
-            border-radius: 12px;
-            border: none;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-
-        .btn:hover {
-            background: #4f46e5;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(99, 102, 241, 0.4);
-        }
-
-        /* --- Footer --- */
-        footer {
-            background: #020617;
-            color: #94a3b8;
-            padding: 60px 20px;
-            text-align: center;
-            font-size: 0.9rem;
-        }
-
-        .footer-admin {
-            margin-top: 20px;
-            color: white;
-            font-weight: 600;
-        }
-
-        .footer-admin a {
-            color: var(--primary);
-            text-decoration: none;
-        }
-
-        /* Mobile Tweaks */
-        @media (max-width: 768px) {
-            .container { padding: 20px; margin: 20px; }
-            .hero h2 { font-size: 2.2rem; }
-            header { padding: 1rem 5%; }
-        }
-    </style>
-</head>
-
-<body>
-
-<header>
-    <h1>AI Larvix</h1>
-    <nav>
-        <a href="#home">Home</a>
-        <a href="#blog">Blog</a>
-        <a href="#contact">Contact</a>
-    </nav>
-</header>
-
-<section class="hero" id="home">
-    <h2>Where Ideas Branch Into Intelligence</h2>
-    <p>
-        Larvix is a modern AI workspace designed for structured thinking, knowledge exploration, 
-        and intelligent collaboration.
-    </p>
-</section>
-
-<section class="container" id="blog">
-    <span class="blog-date">March 11, 2026</span>
-    <h2 class="blog-title">Discovering AI Larvix: A Transformative Workspace</h2>
-
-    <h3>Revolutionizing AI Interactions with Knowledge Systems</h3>
-    <p>Step into a world where artificial intelligence transforms conventional knowledge interactions into dynamic, actionable insights. Advanced AI platforms redefine how information is processed by integrating data with intelligent reasoning.</p>
-    <p>Businesses today navigate increasingly complex digital environments that require scalable, technology-driven solutions.</p>
-    <ul>
-        <li><b>Enhanced Data Integration:</b> Combine traditional databases with AI-driven analytics.</li>
-        <li><b>Actionable AI Strategies:</b> Use insights to simplify operational workflows.</li>
-        <li><b>Localized Optimization:</b> Tailor AI strategies to specific operational environments.</li>
-    </ul>
-
-    <h3>Exploring Branching Conversations: Mapping Thoughtful Decision Trees</h3>
-    <p>Branching conversations create a structured reasoning architecture where each idea expands into multiple directions. This forms a tree-like structure that mirrors how humans naturally explore complex thoughts.</p>
-    <ul>
-        <li><b>Enhanced Clarity:</b> Structured branches visualize idea relationships.</li>
-        <li><b>Improved Problem Solving:</b> Multiple reasoning paths reveal better solutions.</li>
-        <li><b>Adaptive Exploration:</b> Users can revisit and explore alternative ideas.</li>
-    </ul>
-
-    <h3>Unlocking In-Depth Exploration Through Context Branching</h3>
-    <p>Context branching enables multi-threaded exploration of knowledge. Instead of linear conversations, users can analyze several reasoning paths simultaneously.</p>
-    <ul>
-        <li>Segmented data exploration</li>
-        <li>Parallel reasoning workflows</li>
-        <li>Focused problem analysis</li>
-    </ul>
-
-    <h3>Revolutionizing Knowledge Retrieval with RAG</h3>
-    <p>Retrieval-Augmented Generation (RAG) enhances AI systems by combining language models with dynamic information retrieval from knowledge bases.</p>
-    <ul>
-        <li><b>Swift Access to Information</b></li>
-        <li><b>Improved Contextual Accuracy</b></li>
-        <li><b>Efficient Knowledge Extraction</b></li>
-    </ul>
-
-    <h3>Empowering Collaborative Knowledge Exchange</h3>
-    <p>Collaborative AI environments enable teams to build shared knowledge systems, communicate efficiently, and update information structures in real time.</p>
-    <ul>
-        <li>Integrated communication tools</li>
-        <li>Real-time collaboration</li>
-        <li>Scalable knowledge infrastructure</li>
-    </ul>
-
-    <h3>Empowering Business Resilience Through Collaborative Intelligence</h3>
-    <p>Structured thinking frameworks combined with collaborative intelligence allow teams to improve operational efficiency while maintaining strategic oversight.</p>
-    <ul>
-        <li>Clear communication frameworks</li>
-        <li>Faster problem resolution</li>
-        <li>Scalable operational systems</li>
-    </ul>
-
-    <h3>Conclusive Outlook on Transformative AI Workspaces</h3>
-    <p>AI-powered workspaces redefine how teams organize knowledge, automate workflows, and generate strategic insights. Platforms like Larvix empower users to structure reasoning, collaborate intelligently, and unlock the full potential of AI-assisted knowledge systems.</p>
-</section>
-
-<section class="contact" id="contact">
-    <h2>Let's Collaborate</h2>
-    <p>Drop your name and query below to reach our team.</p>
-    
-    <div class="contact-form">
-        <input type="text" id="userName" placeholder="Your Name" required>
-        <textarea id="userQuery" rows="5" placeholder="Your Query/Message" required></textarea>
-        <button class="btn" onclick="sendEmail()">Send Message</button>
-    </div>
-</section>
-
-<footer>
-    <p>Larvix provides cutting-edge infrastructure for the next generation of AI research and deployment. <br> Built for developers, thinkers, and explorers.</p>
-    <div class="footer-admin">
-        Admin: <a href="https://github.com/SudoRV" target="_blank">SudoRV</a>
-    </div>
-    <p style="margin-top: 30px; opacity: 0.5;">© 2026 Larvix. All Rights Reserved.</p>
-</footer>
-
-<script>
-    function sendEmail() {
-        const name = document.getElementById('userName').value;
-        const query = document.getElementById('userQuery').value;
-        const email = "contact@larvix.com";
-        
-        if(name && query) {
-            const subject = encodeURIComponent(`Inquiry from ${name}`);
-            const body = encodeURIComponent(`Name: ${name}\n\nMessage:\n${query}`);
-            window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
-        } else {
-            alert("Please fill out both fields.");
-        }
-    }
-</script>
-
-</body>
+   <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Larvix AI Workspace | Branching Conversations & Knowledge Systems</title>
+      <!-- Primary SEO -->
+      <meta name="description" content="Larvix is an AI workspace for branching conversations, structured thinking, and intelligent knowledge retrieval. Explore how AI Larvix transforms reasoning with RAG, collaboration, and context branching.">
+      <meta name="keywords" content="AI workspace, Larvix AI, branching conversations AI, AI knowledge system, RAG AI platform, AI collaboration workspace, AI research tools">
+      <meta name="author" content="Rahul Verma">
+      <meta name="robots" content="index, follow">
+      <!-- Mobile Optimization -->
+      <meta name="theme-color" content="#6366f1">
+      <meta name="apple-mobile-web-app-capable" content="yes">
+      <meta name="apple-mobile-web-app-status-bar-style" content="default">
+      <!-- Open Graph SEO -->
+      <meta property="og:title" content="Larvix | AI Workspace for Intelligent Knowledge Systems">
+      <meta property="og:description" content="Discover Larvix — an AI workspace built for branching conversations, context exploration, and collaborative knowledge systems powered by RAG.">
+      <meta property="og:type" content="website">
+      <meta property="og:url" content="https://larvix.onrender.com">
+      <meta property="og:image" content="https://larvix.onrender.com/preview.png">
+      <meta name="twitter:card" content="summary_large_image">
+      <meta name="twitter:title" content="Larvix AI Workspace">
+      <meta name="twitter:description" content="AI workspace for branching knowledge exploration, collaboration, and RAG-powered intelligence.">
+      <meta name="twitter:image" content="https://larvix.onrender.com/preview.png">
+      <link rel="canonical" href="https://larvix.in">
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+      <script type="application/ld+json">
+         {
+           "@context": "https://schema.org",
+           "@type": "TechArticle",
+           "headline": "Discovering AI Larvix: A Transformative Workspace",
+           "description": "Larvix is an AI workspace designed for branching conversations, intelligent knowledge retrieval, and collaborative reasoning systems.",
+           "author": {
+             "@type": "Person",
+             "name": "Rahul Verma"
+           },
+           "publisher": {
+             "@type": "Organization",
+             "name": "Larvix"
+           },
+           "datePublished": "2026-03-11"
+         }
+      </script>
+      <style>
+         :root {
+         --primary: #6366f1; /* Indigo */
+         --dark: #0f172a;
+         --light-bg: #f8fafc;
+         --text-main: #1e293b;
+         --text-muted: #64748b;
+         --glass: rgba(255, 255, 255, 0.8);
+         }
+         * {
+         box-sizing: border-box;
+         transition: all 0.3s ease;
+         }
+         html {
+         width: 100%;
+         height: 100%;
+         }
+         body {
+         font-family: 'Inter', sans-serif;
+         margin: 0;
+         background-color: var(--light-bg);
+         color: var(--text-main);
+         line-height: 1.7;
+         scroll-behavior: smooth;
+         width: 100%;
+         min-height: 100%;
+         display: flex;
+         flex-direction: column;
+         }
+         /* --- Modern Navbar --- */
+         header {
+         background: var(--glass);
+         backdrop-filter: blur(12px);
+         -webkit-backdrop-filter: blur(12px);
+         position: sticky;
+         top: 0;
+         z-index: 1000;
+         display: flex;
+         justify-content: space-between;
+         align-items: center;
+         padding: 1rem 10%;
+         border-bottom: 1px solid rgba(0,0,0,0.05);
+         /* Assuming header is around 65px tall */
+         }
+         header h1 {
+         font-weight: 800;
+         font-size: 1.5rem;
+         letter-spacing: -1px;
+         color: var(--dark);
+         margin: 0;                       
+         }
+         .logo {
+         height: 65px;
+         }
+         nav a {
+         color: var(--text-main);
+         margin-left: 25px;
+         text-decoration: none;
+         font-weight: 500;
+         font-size: 0.95rem;
+         }
+         nav a:hover {
+         color: var(--primary);
+         }
+         /* --- Hero Section --- */
+         .hero {   
+         padding: 0px 20px;
+         text-align: center;
+         background: radial-gradient(circle at top right, #e0e7ff 0%, #f8fafc 50%);
+         flex: 1;
+         min-height: calc(100vh - 65px); 
+         display: flex; 
+         flex-direction: column; 
+         justify-content: center;
+         align-items: center;               
+         }
+         .hero h2 {
+         font-size: 3.5rem;
+         font-weight: 800;
+         margin-bottom: 20px;
+         letter-spacing: -1px;
+         line-height: 1.4;
+         color: var(--dark);                  
+         }
+         .hero p {
+         color: var(--text-muted);
+         max-width: 650px;            
+         font-size: 1.2rem;                     
+         }
+         /* --- Blog Container --- */
+         .container {
+         max-width: 850px;
+         /* Reduced margin */
+         margin: 30px auto; 
+         background: white;
+         /* Reduced padding */
+         padding: 25px 30px; 
+         border-radius: 24px;
+         box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
+         }
+         .blog-title {
+         font-size: 2.5rem;
+         font-weight: 800;
+         color: var(--dark);
+         line-height: 1.2;
+         margin-bottom: 10px;
+         }
+         .blog-date {
+         color: var(--primary);
+         font-weight: 600;
+         text-transform: uppercase;
+         letter-spacing: 1px;
+         font-size: 0.8rem;
+         margin-bottom: 30px;
+         display: block;
+         }
+         h3 {
+         font-size: 1.6rem;
+         margin-top: 40px;
+         color: var(--dark);
+         border-left: 4px solid var(--primary);
+         padding-left: 15px;
+         }
+         ul {
+         list-style: none;
+         padding: 0;
+         }
+         ul li {
+         background: #f1f5f9;
+         margin-bottom: 10px;
+         padding: 12px 20px;
+         border-radius: 10px;
+         font-size: 0.95rem;
+         }
+         ul li b {
+         color: var(--primary);
+         }
+         /* --- Contact Section --- */
+         .contact {
+         background: var(--dark);
+         color: white;
+         padding: 100px 20px;
+         text-align: center;
+         }
+         .contact h2 {
+         font-size: 2.5rem;
+         margin-bottom: 30px;
+         }
+         .contact-form {
+         max-width: 500px;
+         margin: 0 auto;
+         display: flex;
+         flex-direction: column;
+         gap: 15px;
+         }
+         .contact-form input, .contact-form textarea {
+         padding: 15px;
+         border-radius: 12px;
+         border: none;
+         background: rgba(255,255,255,0.1);
+         color: white;
+         font-family: inherit;
+         }
+         .contact-form input::placeholder, .contact-form textarea::placeholder {
+         color: #94a3b8;
+         }
+         .btn {
+         background: var(--primary);
+         color: white;
+         padding: 15px;
+         border-radius: 12px;
+         border: none;
+         font-weight: 600;
+         cursor: pointer;
+         margin-top: 10px;
+         }
+         .btn:hover {
+         background: #4f46e5;
+         transform: translateY(-2px);
+         box-shadow: 0 5px 15px rgba(99, 102, 241, 0.4);
+         }
+         /* --- Footer --- */
+         footer {
+         background: #020617;
+         color: #94a3b8;
+         padding: 60px 20px;
+         text-align: center;
+         font-size: 0.9rem;
+         }
+         .footer-admin {
+         margin-top: 20px;
+         color: white;
+         font-weight: 600;
+         }
+         .footer-admin a {
+         color: var(--primary);
+         text-decoration: none;
+         }
+         /* Mobile Tweaks */
+         @media (max-width: 768px) {
+         .container { padding: 20px; margin: 20px; }
+         .hero h2 { font-size: 2.2rem; }
+         header { padding: 1rem 5%; }
+         }
+      </style>
+   </head>
+   <body>
+      <header>
+         <h1>AI Larvix</h1>
+         <nav>
+            <a href="#home">Home</a>
+            <a href="#blog">Blog</a>
+            <a href="#contact">Contact</a>
+         </nav>
+      </header>
+      <section class="hero" id="home">
+         <h2>Where Ideas Branch Into Intelligence</h2>
+         <p>
+            Larvix is a modern AI workspace designed for structured thinking, knowledge exploration, 
+            and intelligent collaboration.
+         </p>
+      </section>
+      <section class="container" id="blog">
+         <span class="blog-date">March 11, 2026</span>
+         <h2 class="blog-title">Discovering AI Larvix: A Transformative Workspace</h2>
+         <h3>Revolutionizing AI Interactions with Knowledge Systems</h3>
+         <p>Step into a world where artificial intelligence transforms conventional knowledge interactions into dynamic, actionable insights. Advanced AI platforms redefine how information is processed by integrating data with intelligent reasoning.</p>
+         <p>Businesses today navigate increasingly complex digital environments that require scalable, technology-driven solutions.</p>
+         <ul>
+            <li><b>Enhanced Data Integration:</b> Combine traditional databases with AI-driven analytics.</li>
+            <li><b>Actionable AI Strategies:</b> Use insights to simplify operational workflows.</li>
+            <li><b>Localized Optimization:</b> Tailor AI strategies to specific operational environments.</li>
+         </ul>
+         <h3>Exploring Branching Conversations: Mapping Thoughtful Decision Trees</h3>
+         <p>Branching conversations create a structured reasoning architecture where each idea expands into multiple directions. This forms a tree-like structure that mirrors how humans naturally explore complex thoughts.</p>
+         <ul>
+            <li><b>Enhanced Clarity:</b> Structured branches visualize idea relationships.</li>
+            <li><b>Improved Problem Solving:</b> Multiple reasoning paths reveal better solutions.</li>
+            <li><b>Adaptive Exploration:</b> Users can revisit and explore alternative ideas.</li>
+         </ul>
+         <h3>Unlocking In-Depth Exploration Through Context Branching</h3>
+         <p>Context branching enables multi-threaded exploration of knowledge. Instead of linear conversations, users can analyze several reasoning paths simultaneously.</p>
+         <ul>
+            <li>Segmented data exploration</li>
+            <li>Parallel reasoning workflows</li>
+            <li>Focused problem analysis</li>
+         </ul>
+         <h3>Revolutionizing Knowledge Retrieval with RAG</h3>
+         <p>Retrieval-Augmented Generation (RAG) enhances AI systems by combining language models with dynamic information retrieval from knowledge bases.</p>
+         <ul>
+            <li><b>Swift Access to Information</b></li>
+            <li><b>Improved Contextual Accuracy</b></li>
+            <li><b>Efficient Knowledge Extraction</b></li>
+         </ul>
+         <h3>Empowering Collaborative Knowledge Exchange</h3>
+         <p>Collaborative AI environments enable teams to build shared knowledge systems, communicate efficiently, and update information structures in real time.</p>
+         <ul>
+            <li>Integrated communication tools</li>
+            <li>Real-time collaboration</li>
+            <li>Scalable knowledge infrastructure</li>
+         </ul>
+         <h3>Empowering Business Resilience Through Collaborative Intelligence</h3>
+         <p>Structured thinking frameworks combined with collaborative intelligence allow teams to improve operational efficiency while maintaining strategic oversight.</p>
+         <ul>
+            <li>Clear communication frameworks</li>
+            <li>Faster problem resolution</li>
+            <li>Scalable operational systems</li>
+         </ul>
+         <h3>Conclusive Outlook on Transformative AI Workspaces</h3>
+         <p>AI-powered workspaces redefine how teams organize knowledge, automate workflows, and generate strategic insights. Platforms like Larvix empower users to structure reasoning, collaborate intelligently, and unlock the full potential of AI-assisted knowledge systems.</p>
+      </section>
+      <section class="contact" id="contact">
+         <h2>Let's Collaborate</h2>
+         <p>Drop your name and query below to reach our team.</p>
+         <div class="contact-form">
+            <input type="text" id="userName" placeholder="Your Name" required>
+            <textarea id="userQuery" rows="5" placeholder="Your Query/Message" required></textarea>
+            <button class="btn" onclick="sendEmail()">Send Message</button>
+         </div>
+      </section>
+      <footer>
+         <p>Larvix provides cutting-edge infrastructure for the next generation of AI research and deployment. <br> Built for developers, thinkers, and explorers.</p>
+         <div class="footer-admin">
+            Admin: <a href="https://github.com/SudoRV" target="_blank">SudoRV</a>
+         </div>
+         <p style="margin-top: 30px; opacity: 0.5;">© 2026 Larvix. All Rights Reserved.</p>
+      </footer>
+      <script>
+         function sendEmail() {
+             const name = document.getElementById('userName').value;
+             const query = document.getElementById('userQuery').value;
+             const email = "contact@larvix.com";
+             
+             if(name && query) {
+                 const subject = encodeURIComponent(`Inquiry from ${name}`);
+                 const body = encodeURIComponent(`Name: ${name}\n\nMessage:\n${query}`);
+                 window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+             } else {
+                 alert("Please fill out both fields.");
+             }
+         }
+      </script>
+   </body>
 </html>
