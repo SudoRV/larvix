@@ -1,10 +1,11 @@
 import { unified } from "unified";
 import rehypeParse from "rehype-parse";
 
-export default function htmlToAst({ html }) {
-    const tree = unified()
-        .use(rehypeParse, { fragment: true })
-        .parse(html);
+export default async function htmlToAst(html) {
+  const processor = unified().use(rehypeParse, { fragment: true });
 
-    return tree;
+  const tree = processor.parse(html);
+  const ast = await processor.run(tree);
+
+  return ast;
 }

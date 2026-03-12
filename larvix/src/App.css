@@ -64,6 +64,7 @@ html, body{
   "Courier New",
   monospace;
   color: white !important;
+  letter-spacing: 1px;
 }
 
 .pre-code-block::-webkit-scrollbar-thumb:hover, .code-block::-webkit-scrollbar-thumb:hover{

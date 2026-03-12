@@ -32,20 +32,20 @@ export default function FlowCanvas() {
             id: crypto.randomUUID(),
             type: "chat",
             position: { x: 30, y: 30 },
-            data: { label: "Root message" },
+            data: { label: "Root message", root: true },
         }
     ];
 
     const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const [dynamicHandles, setDynamicHandles] = useState([]);
-    const [ast, setAst] = useState([]);
+    
     const homeButtonMessageRef = useRef(null);
 
     /* ✅ Run only once safely after mount */
     useEffect(() => {
         const timer = setTimeout(() => {
-            // fitView({ padding: window.innerWidth > 1000 ? 3.8 : 1.4 });
+            fitView({ padding: window.innerWidth > 1000 ? 3.8 : 1.4 });
         }, 0);
 
         return () => clearTimeout(timer);
@@ -131,39 +131,39 @@ export default function FlowCanvas() {
             // update ast 
             const handleId = edges.find(e => e.target === id)?.sourceHandle;
             const branchedElement = document.querySelector(`.branchedto-${handleId}`);
-            const dataNodeId = branchedElement?.getAttribute("data-node-id");
+            const dataNodeId = branchedElement?.getAttribute("data-uid");
 
             if (dataNodeId) {
-                const ast_id = branchedElement.closest(".msg-container").id;
-                const msg_ast = ast.find(a => a.id === ast_id)?.ast;
+                // const ast_id = branchedElement.closest(".msg-container").id;
+                // const msg_ast = ast.find(a => a.id === ast_id)?.ast;
 
-                const updatedTree = updateNodeById(msg_ast, dataNodeId, (node) => {
-                    const existingClasses = node.data?.hProperties?.className || [];
+                // const updatedTree = updateNodeById(msg_ast, dataNodeId, (node) => {
+                //     const existingClasses = node.data?.hProperties?.className || [];
 
-                    return {
-                        ...node,
-                        data: {
-                            ...node.data,
-                            branchId: null,
-                            hProperties: {
-                                ...(node.data?.hProperties || {}),
-                                className: existingClasses.includes("branched") ? existingClasses.filter(ec => !["branched", `branchedto-${handleId}`].includes(ec)) : [...existingClasses]
-                            }
-                        }
-                    }
-                })
+                //     return {
+                //         ...node,
+                //         data: {
+                //             ...node.data,
+                //             branchId: null,
+                //             hProperties: {
+                //                 ...(node.data?.hProperties || {}),
+                //                 className: existingClasses.includes("branched") ? existingClasses.filter(ec => !["branched", `branchedto-${handleId}`].includes(ec)) : [...existingClasses]
+                //             }
+                //         }
+                //     }
+                // })
 
-                const updatedHtml = await astToHtml(updatedTree);
+                // const updatedHtml = await astToHtml(updatedTree);
 
-                setAst(prev =>
-                    prev.map(m =>
-                        m.id === ast_id ? {
-                            ...m,
-                            ast: updatedTree,
-                            html: updatedHtml
-                        } : m
-                    )
-                )
+                // setAst(prev =>
+                //     prev.map(m =>
+                //         m.id === ast_id ? {
+                //             ...m,
+                //             ast: updatedTree,
+                //             html: updatedHtml
+                //         } : m
+                //     )
+                // )
             }
 
             // remove handle, edge, and node
@@ -260,9 +260,6 @@ export default function FlowCanvas() {
                 
                 onAddChild: addChild,
                 onDelete: deleteNode,
-
-                ast,
-                onAddAst: setAst,
             },
         };
     });

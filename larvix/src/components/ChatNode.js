@@ -17,6 +17,7 @@ import {
 
 import { useStates } from "../context/GlobalContext";
 import { astToHtml } from "./AstToHTML";
+import htmlToAst from "../scripts/htmlToAst";
 import { parseMarkdownToAST } from "../scripts/markdownParser";
 import MarkdownRenderer from "./ui/ReactMarkdown";
 import BlankChat from "../components/BlankChat";
@@ -36,6 +37,7 @@ const ChatNode = ({ id, data, selected }) => {
   const updateNodeInternals = useUpdateNodeInternals();
   const initializedRef = useRef(false);
   const [markdownMessages, setMarkdownMessages] = useState([]);
+  const [ast, setAst] = useState([]);
 
   const [streamingBuffer, setStramingBuffer] = useState("");
   const autoScroll = useRef(true);
@@ -105,7 +107,7 @@ const ChatNode = ({ id, data, selected }) => {
     return () => {
       bottomRef.current?.parentElement.removeEventListener("scroll", handleAutoScroll);
     };
-  })
+  }, [])
 
   // set context if element branched
   useEffect(() => {
@@ -173,18 +175,6 @@ const ChatNode = ({ id, data, selected }) => {
 
     if (!messageToSend?.trim() || loading) return;
 
-    // const newUserNode = {
-    //   createdAt: Date.now(),
-    //   id: crypto.randomUUID(),
-    //   parent: id,
-    //   role: "user",
-    //   ast: null,
-    //   html: `<p>${messageToSend}</p>`,
-    //   completed: true
-    // };
-
-    // data.onAddAst(prev => [...prev, newUserNode]);
-
     // create user message bubble 
     addMessage(messageToSend, "user");
 
@@ -251,7 +241,6 @@ const ChatNode = ({ id, data, selected }) => {
 
           if (stream.type === "final") {
             setStramingBuffer("");
-
             await waitForTypingToFinish();
 
             setMarkdownMessages(prev =>
@@ -266,17 +255,6 @@ const ChatNode = ({ id, data, selected }) => {
       }
     } catch (err) {
       console.log(err)
-      // assistantNode = {
-      //   createdAt: Date.now(),
-      //   id: crypto.randomUUID(),
-      //   parent: id,
-      //   role: "assistant",
-      //   ast: null,
-      //   html: "<p>⚠ Server error.</p>"
-      // };
-
-      // data.onAddAst(prev => [...prev, assistantNode]);
-
       addMessage("⚠ Server error.", "assistant");
       setLoading(false);
     }
@@ -360,10 +338,165 @@ const ChatNode = ({ id, data, selected }) => {
   }
 
   // update ast
-  function updateAst(){
-    const updatedMessages = markdownMessages.filter(mm => mm.updateValidated === false && mm.streamed === true);
+  useEffect(() => {
 
-    
+    const pending = markdownMessages.filter(
+      m => m.streamed && !m.updateValidated
+    );
+    if (pending.length === 0) return;
+
+    async function processAst() {
+      for (const mm of pending) {
+        const el = document.querySelector(
+          `#${CSS.escape(mm.id)} .markdown-body`
+        );
+
+        const html = el?.innerHTML;
+        if (!html) continue;
+
+        const ast = await htmlToAst(html);
+        const ast_object = {
+          ...mm,
+          ast,
+          updateValidated: true,
+          typingContent: null,
+          content: null
+        };
+        setAst(prev => [...prev, ast_object]);
+
+        setMarkdownMessages(prev =>
+          prev.map(m =>
+            m.id === mm.id
+              ? { ...m, updateValidated: true }
+              : m
+          )
+        );
+
+        // send ast to server
+
+        console.log(ast_object)
+      }
+    }
+    processAst();
+
+  }, [markdownMessages]);
+
+  // creating branch from element
+  async function createBranch(newBranchRect, context, element) {
+    const selection = window.getSelection();
+    const capturedSelectedText = selection.toString();
+
+    const uuid = crypto.randomUUID();
+
+    let textNodes = [];
+    let startNode;
+    let endNode;
+
+    if (selection.rangeCount || !selection.isCollapsed) {
+      const range = selection.getRangeAt(0);
+      // 1. Get all text nodes in the selection
+      textNodes = getTextNodesInRange(range);
+
+      if (textNodes.length !== 0) {
+        // 2. We need to split the first and last text nodes if the selection 
+        // doesn't cover the whole node.
+        startNode = textNodes[0];
+        endNode = textNodes[textNodes.length - 1];
+
+        // Case A: The selection is completely inside a SINGLE text node
+        if (startNode === endNode) {
+          // Split the end first so the start offset doesn't change!
+          if (range.endOffset < startNode.length) {
+            startNode.splitText(range.endOffset);
+          }
+          // Then split the start and update our array reference
+          if (range.startOffset > 0) {
+            textNodes[0] = startNode.splitText(range.startOffset);
+          }
+        }
+        // Case B: The selection spans MULTIPLE text nodes
+        else {
+          if (range.endContainer === endNode && range.endOffset < endNode.length) {
+            endNode.splitText(range.endOffset);
+          }
+          if (range.startContainer === startNode && range.startOffset > 0) {
+            textNodes[0] = startNode.splitText(range.startOffset);
+          }
+        }
+
+        // 3. Wrap each collected text node in its own span
+        textNodes.forEach(textNode => {
+          const span = document.createElement('span');
+          span.className = 'branched';
+          span.setAttribute('data-uid', uuid); // Use data attribute, not ID!
+
+          textNode.parentNode.insertBefore(span, textNode);
+          span.appendChild(textNode);
+        });
+      }
+    };
+
+    const newBranchElt = document.elementFromPoint(newBranchRect.x, newBranchRect.y);
+    newBranchElt?.classList?.add("branched");
+
+    const ast_id = newBranchElt.closest(".msg-container").id;
+
+    const chatRect = chatRef.current.getBoundingClientRect();
+    const viewport = getViewport();
+    const startNodeRect = startNode?.parentElement?.getBoundingClientRect() || undefined;
+
+    const relativeX =
+      ((startNodeRect ? startNodeRect?.left : newBranchRect.left) - chatRect.left + (startNodeRect ? startNodeRect?.width : newBranchRect.width)) /
+      viewport.zoom +
+      10;
+
+    const relativeY =
+      ((startNodeRect ? startNodeRect?.top : newBranchRect.top) - chatRect.top) / viewport.zoom +
+      chatRef.current.scrollTop;
+
+    const newHandle = {
+      id: `handle-${crypto.randomUUID()}`,
+      parent: id,
+      source: uuid || newBranchElt.getAttribute("data-uid") || null,
+      x: relativeX,
+      originalY: relativeY,
+      y: relativeY,
+      type: "source",
+    };
+
+    const content = capturedSelectedText || context;
+
+    data.onAddChild?.(
+      id,
+      newHandle,
+      {
+        x: chatRect.right + 80,
+        y: relativeY - chatRef.current.scrollTop - 80
+      },
+      content,
+      ast_id
+    );
+
+    updateNodeInternals(id);
+
+    // update message html to store branching data
+    const messageId = element.closest(".msg-container")?.id;
+    if (messageId) {
+      setMarkdownMessages(prev =>
+        prev.map(mm =>
+          mm.id === messageId
+            ? { ...mm, updateValidated: false }
+            : mm
+        ))
+    }
+
+    setToolState(prev => ({
+      ...prev,
+      branch: false
+    }))
+
+    // 4. Cleanup
+    selection.removeAllRanges();
   }
 
   // smooth scroll when message added
@@ -426,7 +559,7 @@ const ChatNode = ({ id, data, selected }) => {
     return () => {
       node?.removeEventListener("mousemove", handleMove);
     };
-  }, [toolState.branch, data.ast]);
+  }, [toolState.branch]);
 
   // home button function ( make node activenode / focus node )
   useEffect(() => {
@@ -437,7 +570,6 @@ const ChatNode = ({ id, data, selected }) => {
       }))
     }
   }, [selected]);
-
 
   // Helper function to get all text nodes within a Range
   function getTextNodesInRange(range) {
@@ -466,114 +598,6 @@ const ChatNode = ({ id, data, selected }) => {
     return textNodes;
   }
 
-  // creating branch from element
-  async function createBranch(newBranchRect, context, element) {
-    const selection = window.getSelection();
-    const capturedSelectedText = selection.toString();
-
-    const uuid = crypto.randomUUID();
-
-    let textNodes = [];
-    let startNode;
-    let endNode;
-
-    if (selection.rangeCount || !selection.isCollapsed) {
-      const range = selection.getRangeAt(0);
-      // 1. Get all text nodes in the selection
-      textNodes = getTextNodesInRange(range);
-
-      if (textNodes.length !== 0) {
-        // 2. We need to split the first and last text nodes if the selection 
-        // doesn't cover the whole node.
-        startNode = textNodes[0];
-        endNode = textNodes[textNodes.length - 1];
-
-        // Case A: The selection is completely inside a SINGLE text node
-        if (startNode === endNode) {
-          // Split the end first so the start offset doesn't change!
-          if (range.endOffset < startNode.length) {
-            startNode.splitText(range.endOffset);
-          }
-          // Then split the start and update our array reference
-          if (range.startOffset > 0) {
-            textNodes[0] = startNode.splitText(range.startOffset);
-          }
-        }
-        // Case B: The selection spans MULTIPLE text nodes
-        else {
-          if (range.endContainer === endNode && range.endOffset < endNode.length) {
-            endNode.splitText(range.endOffset);
-          }
-          if (range.startContainer === startNode && range.startOffset > 0) {
-            textNodes[0] = startNode.splitText(range.startOffset);
-          }
-        }
-
-        // 3. Wrap each collected text node in its own span
-        textNodes.forEach(textNode => {
-          const span = document.createElement('span');
-          span.className = 'branched';
-          span.setAttribute('data-uid', uuid); // Use data attribute, not ID!
-
-          textNode.parentNode.insertBefore(span, textNode);
-          span.appendChild(textNode);
-        });
-      }
-    };
-
-    const newBranchElt = document.elementFromPoint(newBranchRect.x, newBranchRect.y);
-
-    const ast_id = newBranchElt.closest(".msg-container").id;
-    // const targetNodeId = newBranchElt.getAttribute("data-node-id");
-
-    const chatRect = chatRef.current.getBoundingClientRect();
-    const viewport = getViewport();
-    const startNodeRect = startNode?.parentElement?.getBoundingClientRect() || undefined;
-
-    const relativeX =
-      ((startNodeRect ? startNodeRect?.left : newBranchRect.left) - chatRect.left + (startNodeRect ? startNodeRect?.width : newBranchRect.width)) /
-      viewport.zoom +
-      10;
-
-    const relativeY =
-      ((startNodeRect ? startNodeRect?.top : newBranchRect.top) - chatRect.top) / viewport.zoom +
-      chatRef.current.scrollTop;
-
-    const newHandle = {
-      id: `handle-${crypto.randomUUID()}`,
-      parent: id,
-      x: relativeX,
-      originalY: relativeY,
-      y: relativeY,
-      type: "source",
-    };
-
-    const content = capturedSelectedText || context;
-
-    data.onAddChild?.(
-      id,
-      newHandle,
-      {
-        x: chatRect.right + 80,
-        y: relativeY - chatRef.current.scrollTop - 80
-      },
-      content,
-      ast_id
-    );
-
-    updateNodeInternals(id);
-
-    // update ast to store branching data
-
-    setToolState(prev => ({
-      ...prev,
-      branch: false
-    }))
-
-    // 4. Cleanup
-    selection.removeAllRanges();
-  }
-
   function updateNodeById(node, nodeId, updater) {
     if (!node) return node;
 
@@ -595,8 +619,14 @@ const ChatNode = ({ id, data, selected }) => {
     return node;
   }
 
-  const handleCopy = (html) => {
-    const text = new DOMParser().parseFromString(html, "text/html").body.textContent;
+  const handleCopy = (html, markdown) => {
+    let text = "";
+    if (html) {
+      text = new DOMParser().parseFromString(html, "text/html").body.textContent;
+    }
+    else {
+      text = markdown;
+    }
     navigator.clipboard.writeText(text);
   };
 
@@ -630,8 +660,8 @@ const ChatNode = ({ id, data, selected }) => {
         msgElement.blur(); // trigger focusout
 
         if (newText) {
-          // data.onAddAst(prev => prev.filter((a, index) => index < data.ast.indexOf(data.ast.find(a => a.id === msg.id))))
-          // handleSend(newText);
+          setMarkdownMessages(prev => prev.filter((mm, index) => index < markdownMessages.indexOf(markdownMessages.find(mm => mm.id === msg.id))))
+          handleSend(newText);
         }
       }
     };
@@ -651,8 +681,8 @@ const ChatNode = ({ id, data, selected }) => {
 
   const handleRegenerate = () => {
     const input = new DOMParser().parseFromString(markdownMessages[markdownMessages.length - 2].content, "text/html").body.textContent;
-    // data.onAddAst(prev => prev.filter((a, index) => index < data.ast.length - 2))
-    // handleSend(input.trim());
+    setMarkdownMessages(prev => prev.filter((mm, index) => index < markdownMessages.length - 2))
+    handleSend(input.trim());
   };
 
   const handleReadAloud = (html) => {
@@ -716,7 +746,7 @@ const ChatNode = ({ id, data, selected }) => {
             : undefined
         }
         className={`node group bg-gray-50 shadow-xl rounded-xl max-h-screen border border-gray-200 overflow-hidden flex flex-col justify-between
-    ${collapsed ? "min-h-0" : "min-h-[80px]"
+    ${collapsed ? "min-h-0 py-2" : "min-h-[80px]"
           }
 
       ${isFocused
@@ -733,15 +763,14 @@ const ChatNode = ({ id, data, selected }) => {
           className={`
           w-full bg-gray-50 px-3
           flex items-center justify-between
-          transition-all duration-200 z-10
+          transition-all duration-200 py-2 z-10
           ${!collapsed && (
               isVisible
                 ? "py-2 opacity-100"
-                : isFocused ? "" : "py-0 h-0 opacity-0 group-hover:py-2 group-hover:h-auto group-hover:opacity-100"
+                : isFocused ? "" : "py-0 opacity-0  group-hover:h-auto group-hover:opacity-100"
             )
             }
-
-          ${isFocused && "!bg-transparent nodrag nopan"} 
+          ${isFocused && "!bg-transparent nodrag nopan border-b border-neutral-200"} 
         `}
         >
           <div className="flex items-center gap-2">
@@ -762,18 +791,22 @@ const ChatNode = ({ id, data, selected }) => {
             </button>
           </div>
 
-          <button
-            onClick={() => data.onDelete?.(id)}
-            className="p-1 text-gray-800 hover:text-red-500"
-          >
-            <FiX size={20} />
-          </button>
+          {
+            !data.root && (
+              <button
+                onClick={() => data.onDelete?.(id)}
+                className="p-1 text-gray-800 hover:text-red-500"
+              >
+                <FiX size={20} />
+              </button>
+            )
+          }
         </div>
 
         {/* CHAT */}
         {!collapsed && (
           <div
-            className={`group/branch flex-1 p-3 !pt-0 space-y-3 pb-20 pl-5 transition-all duration-200 cursor-default min-h-0 overflow-x-hidden overflow-y-auto scroll-smooth custom-scroll not-branchable relative ${isVisible && "nodrag nopan"} ${isFocused && "nodrag nopan"}
+            className={`group/branch flex-1 p-3 !pt-0 space-y-3 pl-5 transition-all duration-200 cursor-default min-h-0 overflow-x-hidden overflow-y-auto scroll-smooth custom-scroll not-branchable relative ${isVisible ? "nodrag nopan" : ""} ${isFocused && "nodrag nopan"} ${markdownMessages.length > 0 ? " pb-20" : "my-6"}
             `}
             ref={chatRef}
           >
@@ -842,7 +875,7 @@ const ChatNode = ({ id, data, selected }) => {
                         </button>
 
                         <button
-                          onClick={() => handleCopy(msg.raw)}
+                          onClick={() => handleCopy(msg.html, msg.content)}
                           className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
                           title="Copy"
                         >
@@ -852,7 +885,7 @@ const ChatNode = ({ id, data, selected }) => {
                     ) : (
                       <>
                         <button
-                          onClick={() => handleCopy(msg.raw)}
+                          onClick={() => handleCopy(msg.html, msg.content)}
                           className="p-1.5 rounded-md hover:bg-gray-200 hover:text-black transition"
                           title="Copy"
                         >
