@@ -25,23 +25,25 @@ import StreamResponse from "../components/StreamResponse";
 import RenderMessageHTML from "./ui/RenderMessageHTML";
 
 const ChatNode = ({ id, data, selected }) => {
+  const updateNodeInternals = useUpdateNodeInternals();
+
   const [input, setInput] = useState("");
   const [collapsed, setCollapsed] = useState(false);
   const [selectedApi, setSelectedApi] = useState("chatgpt");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
-  const [scrollToBottomVisible, setScrollToBottomVisible] = useState(false);
-  const chatRef = useRef(null);
+
   const nodeRef = useRef(null);
+  const chatRef = useRef(null);
   const branchButtonRef = useRef(null);
-  const updateNodeInternals = useUpdateNodeInternals();
   const initializedRef = useRef(false);
+
   const [markdownMessages, setMarkdownMessages] = useState([]);
+  const [streamingBuffer, setStramingBuffer] = useState("");
   const [ast, setAst] = useState([]);
 
-  const [streamingBuffer, setStramingBuffer] = useState("");
   const autoScroll = useRef(true);
-
+  const [scrollToBottomVisible, setScrollToBottomVisible] = useState(false);
   const { toolState, setToolState } = useStates();
   const { getViewport } = useReactFlow();
 
@@ -84,9 +86,8 @@ const ChatNode = ({ id, data, selected }) => {
     return () => resizeObserver.disconnect();
   }, []);
 
-
   useEffect(() => {
-    // check for wheen up
+    // check for wheel up
     function handleAutoScroll() {
       const container = bottomRef.current.parentElement;
 
@@ -108,65 +109,6 @@ const ChatNode = ({ id, data, selected }) => {
       bottomRef.current?.parentElement.removeEventListener("scroll", handleAutoScroll);
     };
   }, [])
-
-  // set context if element branched
-  useEffect(() => {
-    if (!initializedRef.current && data?.context) {
-      setInput(data.context);
-      initializedRef.current = true;
-    }
-  }, [data?.context]);
-
-  // adjust handels on scroll clamping
-  useEffect(() => {
-    const el = chatRef.current;
-    if (!el) return;
-
-    let ticking = false;
-
-    const onScroll = () => {
-      if (ticking) return;
-
-      ticking = true;
-
-      requestAnimationFrame(() => {
-        const scrollTop = el.scrollTop;
-        const chatHeight = el.clientHeight;
-        const nodeHeight = nodeRef.current.clientHeight;
-
-        const bottomTop =
-          bottomRef.current.getBoundingClientRect().top;
-        const nodeTop =
-          nodeRef.current.getBoundingClientRect().top;
-
-        data.onAddHandle(prev =>
-          prev.map(handle => {
-            const visibleY = handle.originalY - scrollTop;
-            let clampedY = handle.originalY;
-
-            if (visibleY < 0) {
-              clampedY = scrollTop - 40;
-            } else if (visibleY > nodeHeight) {
-              clampedY = scrollTop + nodeHeight - 40;
-            }
-
-            if (clampedY !== handle.y) {
-              return { ...handle, y: clampedY };
-            }
-
-            return handle;
-          })
-        );
-
-        updateNodeInternals(id);
-
-        ticking = false;
-      });
-    };
-
-    el.addEventListener("scroll", onScroll);
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [id, updateNodeInternals]);
 
   // ai response
   const handleSend = async (overrideInput) => {
@@ -273,6 +215,7 @@ const ChatNode = ({ id, data, selected }) => {
   const typingQueue = useRef([]);
   const isTyping = useRef(false);
 
+  // initialize typing buffer
   useEffect(() => {
     if (!streamingBuffer) return;
 
@@ -337,6 +280,18 @@ const ChatNode = ({ id, data, selected }) => {
     isTyping.current = false;
   }
 
+  // smooth scroll when message added
+  useEffect(() => {
+    const newUserMessage = markdownMessages[markdownMessages.length - 1];
+    const newUserMessageElement = newUserMessage ? document.getElementById(newUserMessage.id) : undefined;
+
+    if (newUserMessageElement && newUserMessage.role === "user") {
+      newUserMessageElement.scrollIntoView({ behavior: "smooth" });
+    } else return
+
+    // bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [markdownMessages, loading]);
+
   // update ast
   useEffect(() => {
 
@@ -380,6 +335,56 @@ const ChatNode = ({ id, data, selected }) => {
     processAst();
 
   }, [markdownMessages]);
+
+  //element level branching (hover)
+  useEffect(() => {
+    let prevEl = null;
+
+    const handleMove = (e) => {
+      if (!toolState.branch) return;
+
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+
+      if (e.ctrlKey) return;
+
+      // Remove style from previous element
+      if (prevEl && prevEl !== el) {
+        prevEl.classList.remove("bg-blue-100", "text-black", "w-fit");
+      }
+
+      // Add style to new element
+      if (el && !el.classList.contains("not-branchable")) {
+        el.classList.add("bg-blue-100", "text-black", "w-fit");
+
+        // show branch button
+        const el_rect = el.getBoundingClientRect();
+        const node_rect = nodeRef.current.getBoundingClientRect();
+        const viewport = getViewport();
+
+        const x = (e.clientX - chatRef.current.getBoundingClientRect().left) / viewport.zoom;
+
+        const y = (e.clientY - chatRef.current.getBoundingClientRect().top) / viewport.zoom + chatRef.current.scrollTop;
+
+        branchButtonRef.current.style.top = `${y + 30}px`;
+        branchButtonRef.current.style.left = `${x + 30}px`;
+
+        branchButtonRef.current.onclick = () => {
+          createBranch(el_rect, el.innerText, el);
+        };
+
+        prevEl = el;
+      } else {
+        prevEl = null;
+      }
+    };
+
+    const node = chatRef.current;
+    node?.addEventListener("mousemove", handleMove);
+
+    return () => {
+      node?.removeEventListener("mousemove", handleMove);
+    };
+  }, [toolState.branch]);
 
   // creating branch from element
   async function createBranch(newBranchRect, context, element) {
@@ -499,67 +504,73 @@ const ChatNode = ({ id, data, selected }) => {
     selection.removeAllRanges();
   }
 
-  // smooth scroll when message added
+  // set context if element branched
   useEffect(() => {
-    const newUserMessage = markdownMessages[markdownMessages.length - 1];
-    const newUserMessageElement = newUserMessage ? document.getElementById(newUserMessage.id) : undefined;
+    if (!initializedRef.current && data?.context) {
+      setInput(data.context);
+      initializedRef.current = true;
+    }
+  }, [data?.context]);
 
-    if (newUserMessageElement && newUserMessage.role === "user") {
-      newUserMessageElement.scrollIntoView({ behavior: "smooth" });
-    } else return
-
-    // bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [markdownMessages, loading]);
-
-  //element level branching (hover)
+  // adjust handels on scroll clamping
   useEffect(() => {
-    let prevEl = null;
+    const el = chatRef.current;
+    if (!el) return;
 
-    const handleMove = (e) => {
-      if (!toolState.branch) return;
+    let ticking = false;
 
-      const el = document.elementFromPoint(e.clientX, e.clientY);
+    const onScroll = () => {
+      if (ticking) return;
 
-      if (e.ctrlKey) return;
+      ticking = true;
 
-      // Remove style from previous element
-      if (prevEl && prevEl !== el) {
-        prevEl.classList.remove("bg-blue-100", "text-black", "w-fit");
-      }
+      requestAnimationFrame(() => {
+        const scrollTop = el.scrollTop;
+        const chatHeight = el.clientHeight;
+        const nodeHeight = nodeRef.current.clientHeight;
 
-      // Add style to new element
-      if (el && !el.classList.contains("not-branchable")) {
-        el.classList.add("bg-blue-100", "text-black", "w-fit");
+        const bottomTop =
+          bottomRef.current.getBoundingClientRect().top;
+        const nodeTop =
+          nodeRef.current.getBoundingClientRect().top;
 
-        // show branch button
-        const el_rect = el.getBoundingClientRect();
-        const node_rect = nodeRef.current.getBoundingClientRect();
-        const viewport = getViewport();
+        data.onAddHandle(prev =>
+          prev.map(handle => {
+            const visibleY = handle.originalY - scrollTop;
+            let clampedY = handle.originalY;
 
-        const x = (e.clientX - chatRef.current.getBoundingClientRect().left) / viewport.zoom;
+            if (visibleY < 0) {
+              clampedY = scrollTop - 40;
+            } else if (visibleY > nodeHeight) {
+              clampedY = scrollTop + nodeHeight - 40;
+            }
 
-        const y = (e.clientY - chatRef.current.getBoundingClientRect().top) / viewport.zoom + chatRef.current.scrollTop;
+            if (clampedY !== handle.y) {
+              return { ...handle, y: clampedY };
+            }
 
-        branchButtonRef.current.style.top = `${y + 30}px`;
-        branchButtonRef.current.style.left = `${x + 30}px`;
+            return handle;
+          })
+        );
 
-        branchButtonRef.current.onclick = () => {
-          createBranch(el_rect, el.innerText, el);
-        };
+        updateNodeInternals(id);
 
-        prevEl = el;
-      } else {
-        prevEl = null;
-      }
+        ticking = false;
+      });
     };
 
-    const node = chatRef.current;
-    node?.addEventListener("mousemove", handleMove);
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [id, updateNodeInternals]);
 
-    return () => {
-      node?.removeEventListener("mousemove", handleMove);
-    };
-  }, [toolState.branch]);
+  // remove branched class if node deleted
+  useEffect(()=>{
+    nodeRef.current?.querySelectorAll(".branched")?.forEach(b => {
+      if(!data.dynamicHandles.includes(b.id)) {
+        b.classList.remove("branched");
+      }
+    })
+  }, [data.dynamicHandles])
 
   // home button function ( make node activenode / focus node )
   useEffect(() => {
@@ -753,9 +764,9 @@ const ChatNode = ({ id, data, selected }) => {
             ? "!rounded-none border-0 shadow-non"
             : "w-[460px] border border-gray-200"
           }
-      
-    `}
 
+        ${data.root ? "min-h-screen rounded-none" : ""}
+    `}
         ref={nodeRef}
       >
         {/* HEADER */}
@@ -771,6 +782,8 @@ const ChatNode = ({ id, data, selected }) => {
             )
             }
           ${isFocused && "!bg-transparent nodrag nopan border-b border-neutral-200"} 
+
+          ${data.root ? "opacity-100" : ""}
         `}
         >
           <div className="flex items-center gap-2">
@@ -952,6 +965,8 @@ const ChatNode = ({ id, data, selected }) => {
               }
 
             ${isFocused && "!bg-neutral-700 text-white !rounded-full pl-4 mb-3 lg:max-w-3xl max-w-2xl mx-auto shadow-2xl fixed bottom-0 left-1/2 -translate-x-1/2 "}
+
+            ${data.root ? "py-2 opacity-100 h-auto" : ""}
           `}
           >
             <button className="p-1 text-inherit hover:text-black">

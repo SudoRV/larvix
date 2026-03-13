@@ -56,9 +56,7 @@ function CodeBlock({ inline, className, children, highlight = 0, ...props }) {
 
   return (
     <CustomEditor language={language}>
-      <code className={className} {...props}>
-        {children}
-      </code>
+      {children}
     </CustomEditor>
   );
 }

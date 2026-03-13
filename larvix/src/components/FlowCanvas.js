@@ -22,16 +22,13 @@ export default function FlowCanvas() {
     const { toolState, setToolState } = useStates();
     const reactFlowWrapper = document.querySelector(".react-flow");
     const updateNodeInternals = useUpdateNodeInternals();
-
-    const {
-        fitView,
-    } = useReactFlow();
+    const { fitView } = useReactFlow();
 
     const initialNodes = [
         {
             id: crypto.randomUUID(),
             type: "chat",
-            position: { x: 30, y: 30 },
+            position: { x: 0, y: 0 },
             data: { label: "Root message", root: true },
         }
     ];
@@ -39,16 +36,14 @@ export default function FlowCanvas() {
     const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const [dynamicHandles, setDynamicHandles] = useState([]);
-    
-    const homeButtonMessageRef = useRef(null);
 
     /* ✅ Run only once safely after mount */
     useEffect(() => {
-        const timer = setTimeout(() => {
-            fitView({ padding: window.innerWidth > 1000 ? 3.8 : 1.4 });
-        }, 0);
+        // const timer = setTimeout(() => {
+        //     fitView({ padding: window.innerWidth > 1000 ? 3.8 : 1.4 });
+        // }, 0);
 
-        return () => clearTimeout(timer);
+        // return () => clearTimeout(timer);
     }, [fitView]);
 
     const onConnect = useCallback(
@@ -128,44 +123,6 @@ export default function FlowCanvas() {
 
     const deleteNode = useCallback(
         async (id) => {
-            // update ast 
-            const handleId = edges.find(e => e.target === id)?.sourceHandle;
-            const branchedElement = document.querySelector(`.branchedto-${handleId}`);
-            const dataNodeId = branchedElement?.getAttribute("data-uid");
-
-            if (dataNodeId) {
-                // const ast_id = branchedElement.closest(".msg-container").id;
-                // const msg_ast = ast.find(a => a.id === ast_id)?.ast;
-
-                // const updatedTree = updateNodeById(msg_ast, dataNodeId, (node) => {
-                //     const existingClasses = node.data?.hProperties?.className || [];
-
-                //     return {
-                //         ...node,
-                //         data: {
-                //             ...node.data,
-                //             branchId: null,
-                //             hProperties: {
-                //                 ...(node.data?.hProperties || {}),
-                //                 className: existingClasses.includes("branched") ? existingClasses.filter(ec => !["branched", `branchedto-${handleId}`].includes(ec)) : [...existingClasses]
-                //             }
-                //         }
-                //     }
-                // })
-
-                // const updatedHtml = await astToHtml(updatedTree);
-
-                // setAst(prev =>
-                //     prev.map(m =>
-                //         m.id === ast_id ? {
-                //             ...m,
-                //             ast: updatedTree,
-                //             html: updatedHtml
-                //         } : m
-                //     )
-                // )
-            }
-
             // remove handle, edge, and node
             setDynamicHandles((prev) => prev.filter((p) => p.id !== edges.find(e => e.target === id)?.sourceHandle));
 
@@ -238,7 +195,6 @@ export default function FlowCanvas() {
     }, [toolState.home, fitView]);
 
     const isFocused = toolState.home.state && toolState.home.activeNode;
-
     const activeNodeId = toolState.home.activeNode;
 
     const nodesWithHandlers = nodes.map((node) => {
@@ -259,7 +215,7 @@ export default function FlowCanvas() {
                 onAddHandle: setDynamicHandles,
                 
                 onAddChild: addChild,
-                onDelete: deleteNode,
+                onDelete: deleteNode,         
             },
         };
     });
@@ -288,11 +244,6 @@ export default function FlowCanvas() {
                 fitView={false}
             >
                 {/* <Background gap={20} size={1} color="#444" /> */}
-                {
-                    !isFocused && (
-                        <Controls />
-                    )
-                }
             </ReactFlow>
         </div>
     );

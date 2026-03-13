@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600&display=swap');
+
 *{
     box-sizing: border-box;
 }
@@ -54,17 +56,14 @@ html, body{
   overflow: auto;
   scrollbar-width: thin;
   scrollbar-color: #bebebe #181818;
-  font-family:
-  ui-monospace,
-  SFMono-Regular,
-  Menlo,
-  Monaco,
-  Consolas,
-  "Liberation Mono",
-  "Courier New",
-  monospace;
+  font-family: "Fira Code" !important;
   color: white !important;
   letter-spacing: 1px;
+}
+
+.pre-code-block code{
+  font-family: "Fira Code" !important;
+  font-weight: 100;
 }
 
 .pre-code-block::-webkit-scrollbar-thumb:hover, .code-block::-webkit-scrollbar-thumb:hover{
@@ -78,7 +77,6 @@ html, body{
 .markdown-body {
   font-size: 18px;        
   line-height: 1.6;
-  /* color: #e6e6e6; */
   word-break: break-word;
 }
 
