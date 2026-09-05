@@ -4,9 +4,9 @@
 <head>
    <meta charset="UTF-8">
    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-   
+
    <title>AI Larvix | Branching Ideas and Conversations</title>
-   
+
    <link rel="icon" href="/favicon.ico" type="image/x-icon">
 
    <!-- Primary SEO -->
@@ -541,18 +541,40 @@
          const name = document.getElementById('userName').value;
          const query = document.getElementById('userQuery').value;
          const email = "help.sudorv@gmail.com";
-         
+
          if (name && query) {
             const subject = encodeURIComponent(`Inquiry from ${name} for AI Larvix`);
             const body = encodeURIComponent(`Name: ${name}\n\nMessage:\n${query}`);
 
             console.log(subject, body, `mailto:${email}?subject=${subject}&body=${body}`)
-            
+
             window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
          } else {
             alert("Please fill out both fields.");
          }
       }
+   </script>
+   <script>
+      const popup = window.open(
+         'https://business.facebook.com/messaging/whatsapp/onboard/?app_id=1118777837487477&config_id=2056324505078045&extras=%7B%22sessionInfoVersion%22%3A%223%22%2C%22version%22%3A%22v4%22%7D',
+         'WhatsKit_Onboarding',
+         'width=600,height=750'
+      );
+
+      // Listen for Meta's postMessage events
+      window.addEventListener('message', (event) => {
+         if (!event.origin.endsWith('facebook.com')) return;
+
+         try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'WA_EMBEDDED_SIGNUP') {
+               console.log('User completed onboarding:', data);
+               // data contains: waba_id, phone_number_id
+            }
+         } catch (err) {
+            // Non-JSON events can be ignored
+         }
+      });
    </script>
 </body>
 

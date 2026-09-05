@@ -28,7 +28,7 @@ export default function FlowCanvas() {
         {
             id: crypto.randomUUID(),
             type: "chat",
-            position: { x: 0, y: 0 },
+            position: { x: 30, y: 30 },
             data: { label: "Root message", root: true },
         }
     ];
@@ -39,11 +39,11 @@ export default function FlowCanvas() {
 
     /* ✅ Run only once safely after mount */
     useEffect(() => {
-        // const timer = setTimeout(() => {
-        //     fitView({ padding: window.innerWidth > 1000 ? 3.8 : 1.4 });
-        // }, 0);
+        const timer = setTimeout(() => {
+            fitView({ padding: window.innerWidth > 1000 ? 3.8 : 1.4 });
+        }, 0);
 
-        // return () => clearTimeout(timer);
+        return () => clearTimeout(timer);
     }, [fitView]);
 
     const onConnect = useCallback(
@@ -244,6 +244,11 @@ export default function FlowCanvas() {
                 fitView={false}
             >
                 {/* <Background gap={20} size={1} color="#444" /> */}
+                {
+                    !isFocused && (
+                        <Controls />
+                    )
+                }
             </ReactFlow>
         </div>
     );

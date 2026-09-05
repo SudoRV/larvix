@@ -764,8 +764,6 @@ const ChatNode = ({ id, data, selected }) => {
             ? "!rounded-none border-0 shadow-non"
             : "w-[460px] border border-gray-200"
           }
-
-        ${data.root ? "min-h-screen rounded-none" : ""}
     `}
         ref={nodeRef}
       >
@@ -782,8 +780,6 @@ const ChatNode = ({ id, data, selected }) => {
             )
             }
           ${isFocused && "!bg-transparent nodrag nopan border-b border-neutral-200"} 
-
-          ${data.root ? "opacity-100" : ""}
         `}
         >
           <div className="flex items-center gap-2">
@@ -965,8 +961,6 @@ const ChatNode = ({ id, data, selected }) => {
               }
 
             ${isFocused && "!bg-neutral-700 text-white !rounded-full pl-4 mb-3 lg:max-w-3xl max-w-2xl mx-auto shadow-2xl fixed bottom-0 left-1/2 -translate-x-1/2 "}
-
-            ${data.root ? "py-2 opacity-100 h-auto" : ""}
           `}
           >
             <button className="p-1 text-inherit hover:text-black">
